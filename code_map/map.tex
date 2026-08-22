@@ -1,0 +1,259 @@
+\documentclass[a4paper,12pt]{article}
+
+% -----------------------------
+% Pacchetti
+% -----------------------------
+\usepackage[ruled,vlined]{algorithm2e}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+% -----------------------------
+% Configurazione aspetto codice
+% -----------------------------
+
+\lstset{
+	language=Python,
+	basicstyle=\ttfamily\small,
+	keywordstyle=\color{blue},
+	stringstyle=\color{red},
+	commentstyle=\color{green!50!black},
+	numbers=left,
+	numberstyle=\tiny\color{gray},
+	frame=single,
+	breaklines=true
+}
+
+% -----------------------------
+% Definizione colori personalizzati
+% -----------------------------
+\definecolor{CommentBlue}{RGB}{30,90,200}
+\definecolor{CommentGray}{RGB}{120,120,120}
+\definecolor{CommentRed}{RGB}{200,40,40}
+
+% -----------------------------
+% Macro per commenti colorati
+% -----------------------------
+\newcommand{\BlueComment}[1]{\tcp{\textcolor{CommentBlue}{#1}}}
+\newcommand{\GrayComment}[1]{\tcp{\textcolor{CommentGray}{#1}}}
+\newcommand{\RedComment}[1]{\tcp{\textcolor{CommentRed}{#1}}}
+
+% Versione a fine riga
+\newcommand{\BlueCommentInline}[1]{\tcp*{\textcolor{CommentBlue}{#1}}}
+\newcommand{\GrayCommentInline}[1]{\tcp*{\textcolor{CommentGray}{#1}}}
+\newcommand{\RedCommentInline}[1]{\tcp*{\textcolor{CommentRed}{#1}}}
+
+
+
+\title{Correspondence between NUTS implemented by hand and the Gellmann's article}
+\author{Tommaso Pirazzo}
+\date{}
+
+\begin{document}
+	
+	\maketitle
+	
+	In the following there is the $6^{th}$ algorithm of the article \emph{"The No-U-Turn Sampler: Adaptively Setting Path Lengths
+	in Hamiltonian Monte Carlo"} with the indicated correspondences with the code implemented in the file \verb|JAX_NUTS_functions.ipynb|.
+	\vspace{.5cm}
+
+\section{Leapfrog integrator}
+
+	
+\section{FindReasonableEpsilon}
+	
+	\begin{algorithm}[H]
+		\caption{Heuristic for choosing an initial value of $\epsilon$}
+		\KwIn{Current position $\theta$}
+		\KwOut{Initial step size $\epsilon$}
+		
+		% Step 1: sample momentum
+		Sample momentum $r \sim \mathcal{N}(0, I)$\;
+		
+		% Step 2: initial epsilon
+		$\epsilon \leftarrow 1$\;
+		
+		% Step 3: compute initial joint log-density
+		$E_0 \leftarrow \log p(\theta, r)$\;
+		
+		% Step 4: one leapfrog step
+		$(\theta', r') \leftarrow \text{Leapfrog}(\theta, r, \epsilon)$\;
+		$E_1 \leftarrow \log p(\theta', r')$\;
+		
+		% Step 5: acceptance statistic
+		$\text{log\_accept} \leftarrow E_1 - E_0$\;
+		
+		% Step 6: choose direction
+		\eIf{$\text{log\_accept} > \log(0.5)$}{
+			$a \leftarrow +1$\;
+		}{
+			$a \leftarrow -1$\;
+		}
+		
+		% Step 7: expand or shrink epsilon
+		\While{$a \cdot \text{log\_accept} > -a \cdot \log(2)$}{
+			$\epsilon \leftarrow \epsilon \cdot 2^{a}$\;
+			$(\theta', r') \leftarrow \text{Leapfrog}(\theta, r, \epsilon)$\;
+			$E_1 \leftarrow \log p(\theta', r')$\;
+			$\text{log\_accept} \leftarrow E_1 - E_0$\;
+		}
+		
+		\Return{$\epsilon$}\;
+		
+	\end{algorithm}
+
+\begin{lstlisting}
+def FindReasonableEpsilon(theta, key) :
+ assert theta.ndim == 1
+			
+ # sample momentum r ~ N(0, I)
+ key, subkey = jrnd.split(key)
+ r = jrnd.normal(subkey, shape=theta.shape)
+				
+ # initial epsilon
+ epsilon = 1.0
+				
+ # compute initial log joint density
+ E0 = log_p(theta, r)
+				
+ # one leapfrog step
+ theta_prime, r_prime = Leapfrog(theta, r, epsilon)
+ E1 = log_p(theta_prime, r_prime)
+				
+ # log acceptance probability
+ log_accept = E1 - E0
+				
+ # direction: +1 (increase) or -1 (decrease)
+ a = jnp.where(log_accept > jnp.log(0.5), 1.0, -1.0)
+				
+ # -------------------------------
+ # cond_fun: while loop condition
+ # -------------------------------
+ def cond_fun(state):
+  eps, log_acc = state
+  return (a * log_acc) > (-a * jnp.log(2.0))
+				
+ # --------------------
+ # body_fun: loop body
+ # --------------------
+ def body_fun(state):
+  eps, _ = state
+  eps = eps * (2.0 ** a)
+  theta_p, r_p = Leapfrog(theta, r, eps)
+  E1 = log_p(theta_p, r_p)
+  log_acc = E1 - E0
+  return (eps, log_acc)
+				
+ # while loop in JAX
+ epsilon, _ = jax.lax.while_loop(cond_fun, body_fun, (epsilon, log_accept))
+				
+ return epsilon
+\end{lstlisting}
+
+\section{BuildTree}
+This pseudo-code is referred to the \verb*|BuildTree| function implemented in the \textbf{Algorithm 6} (No-U-Turn Sampler with Dual Averaging) of the article. This function is composed by two cases:
+\begin{itemize}
+	\item $j=0$: Base case $\rightarrow$ take one leapfrog step in the direction v.
+	\item $j \neq 0$: Recursion $\rightarrow$ implicitly build the left and right subtrees.
+\end{itemize}
+The "base case" is implemented before in the function \verb*|build_tree_base| and then called in the complete function \verb*|BuildTree|. 
+
+	\begin{algorithm}[H]
+		\caption{BuildTree$(\theta, r, u, v, j, \epsilon)$}
+		\KwIn{Position $\theta$, momentum $r$, slice variable $u$, direction $v \in \{-1,+1\}$, depth $j$, step size $\epsilon$}
+		\KwOut{
+			$(\theta^-, r^-)$, $(\theta^+, r^+)$, candidate $\theta'$, 
+			number of valid points $n'$, stop flag $s'$, 
+			acceptance sum $\alpha'$, acceptance count $n_\alpha'$
+		}
+		
+		\If{$j = 0$}{
+			% Base case: single leapfrog step
+			$(\theta', r') \leftarrow \text{Leapfrog}(\theta, r, v \cdot \epsilon)$\;
+			$E' \leftarrow \log p(\theta', r')$\;
+			
+			% Slice test
+			$n' \leftarrow \mathbb{I}\left[u < \exp(E')\right]$\;
+			
+			% Stop criterion (turning)
+			$s' \leftarrow \mathbb{I}\left[u < \exp(E')\right]$\;
+			
+			% Acceptance statistics
+			$\Delta \leftarrow E' - \log p(\theta, r)$\;
+			$\alpha' \leftarrow \min\{1, \exp(\Delta)\}$\;
+			$n_\alpha' \leftarrow 1$\;
+			
+			\Return{
+				$(\theta', r')$, $(\theta', r')$, $\theta'$, 
+				$n'$, $s'$, $\alpha'$, $n_\alpha'$
+			}\;
+		}
+		
+		% Recursive case: build left subtree
+		$(\theta^-, r^-), (\theta^+, r^+), \theta', 
+		n', s', \alpha', n_\alpha' 
+		\leftarrow \text{BuildTree}(\theta, r, u, v, j-1, \epsilon)$\;
+		
+		\If{$s' = 1$}{
+			\Return{
+				$(\theta^-, r^-), (\theta^+, r^+), \theta', 
+				n', s', \alpha', n_\alpha'$
+			}\;
+		}
+		
+		% Build right subtree
+		\eIf{$v = -1$}{
+			$(\theta^-, r^-), (\_, \_), \theta'', 
+			n'', s'', \alpha'', n_\alpha'' 
+			\leftarrow \text{BuildTree}(\theta^-, r^-, u, v, j-1, \epsilon)$\;
+		}{
+			$(\_, \_), (\theta^+, r^+), \theta'', 
+			n'', s'', \alpha'', n_\alpha'' 
+			\leftarrow \text{BuildTree}(\theta^+, r^+, u, v, j-1, \epsilon)$\;
+		}
+		
+		% Uniform choice of candidate
+		$p \leftarrow \frac{n''}{n' + n''}$\;
+		\If{\text{Bernoulli}(p)}{
+			$\theta' \leftarrow \theta''$\;
+		}
+		
+		% Combine statistics
+		$n' \leftarrow n' + n''$\;
+		$s' \leftarrow s' \cdot s'' \cdot 
+		\text{Turning}(\theta^-, r^-, \theta^+, r^+)$\;
+		$\alpha' \leftarrow \alpha' + \alpha''$\;
+		$n_\alpha' \leftarrow n_\alpha' + n_\alpha''$\;
+		
+		\Return{
+			$(\theta^-, r^-), (\theta^+, r^+), \theta', 
+			n', s', \alpha', n_\alpha'$
+		}\;
+		
+	\end{algorithm}
+	
+
+\section{Final algorithm}	
+	\begin{algorithm}[H]
+		\caption{No-U-Turn Sampler with Dual Averaging}
+		Given $\theta_0$ , $\delta$, $L$, $M$, $M^{adapt}$ : \\
+		\BlueComment{FindReasonableEpsilon($\theta$, key) $\rightarrow$ epsilon}
+		Set $\epsilon_0$ = FindReasonableEpsilon($\theta$),\\ 
+		 $\mu$ = $\log{10\epsilon_0}$, $\bar{\epsilon}_0$ = 1, $\bar{H}_0$ = 0, $\gamma$ = 0.05, $t_0$ = 10, $k$ = 0.75.
+		 
+		
+		
+		\KwIn{Array $A$ di lunghezza $n$, valore $x$}
+		\KwOut{Indice $i$ tale che $A[i] = x$, oppure \texttt{None}}
+		
+		\For{$i \leftarrow 1$ \KwTo $n$}{
+			\If{$A[i] = x$}{
+				\Return $i$
+			}
+		}
+		\Return None
+	\end{algorithm}
+	
+\end{document}
+FindReasonableEpsilon
