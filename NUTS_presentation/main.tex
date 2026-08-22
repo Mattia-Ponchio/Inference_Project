@@ -53,7 +53,11 @@
 		\emph{NUTS} uses a recursive algorithm to build a set of candidate points, stopping automatically when it starts retrace its steps. 
 		
 		\pause
-		\includegraphics[width=0.6\textwidth]{images/immagini_leonardo/NUTS_diagram.png}
+		\begin{tikzpicture}
+			\node[opacity=0.5] {
+				\includegraphics[width=0.6\textwidth]{images/immagini_leonardo/NUTS_diagram.png}
+			};
+		\end{tikzpicture}
 		
 	\end{center}
 	
@@ -72,7 +76,12 @@
 	\end{itemize}
 	\pause
 	\centering
-    \includegraphics[width=0.75\textwidth]{images/immagini_leonardo/HMC.png}
+
+	\begin{tikzpicture}
+			\node[opacity=0.75] {
+				    \includegraphics[width=0.75\textwidth]{images/immagini_leonardo/HMC.png}
+			};
+		\end{tikzpicture}
 
 \end{frame}
 
@@ -102,7 +111,11 @@
 		To simplify the derivation and implementation of the algorithm, NUTS uses a slice variable $u$ with conditional distribution $p(u|\theta, r) = \mathcal{U}(u; [0, exp{\mathcal{L}(\theta)-\frac{1}{2}r\cdot r}]) $. \\ 
 		This way $p(\theta, r | u ) = \mathcal{U}(\theta, r; {\theta', r' | exp{\mathcal{L}(\theta)-\frac{1}{2}r\cdot r} \geq u})$. \\
 		\pause
-		\includegraphics[width=0.65\textwidth]{images/immagini_leonardo/NUTS_example.png}
+		\begin{tikzpicture}
+			\node[opacity=0.75] {
+				\includegraphics[width=0.65\textwidth]{images/immagini_leonardo/NUTS_example.png}
+			};
+		\end{tikzpicture}
 		
 	\end{center}
 	
@@ -110,7 +123,7 @@
 
 %----------------------------------------------------------------------------------------------------
 
-\begin{frame}{High-levl NUTS algorithm}
+\begin{frame}{High-level NUTS algorithm}
 	
 	\begin{columns}
 
@@ -119,18 +132,26 @@
 		
 			\begin{itemize}
 				\item The algorithm resamples $u|\theta, r$ at each iteration,
+				\pause
 				\item uses Leapfrog integrator to trace a path forward and backwards first 1 step,
+				\pause
 				\item then doubling for successive iterations.
+				\pause
 				\item This doubling process implicitly builds a balanced binary tree whose leaf nodes correspond to position-momentum states.
+				\pause
 				\item The doubling is halted when the subtrajectory starts to double back on itself.
-				% \item At this point NUTS stops the simulation and samples from among the set of points.
 			\end{itemize}
 
 		\end{column}
 		
-        \begin{column}{0.5\textwidth}
+		\begin{column}<1->{0.5\textwidth}
+		\onslide<1->
             \centering
-            \includegraphics[width=1\textwidth]{images/immagini_leonardo/NUTS_example.png} \\
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+		            \includegraphics[width=1\textwidth]{images/immagini_leonardo/NUTS_example.png}
+				};
+			\end{tikzpicture}
 			\small 
 			Example of a NUTS trajectory, with the slice variable $u$.
         \end{column}    
@@ -140,227 +161,292 @@
 
 %----------------------------------------------------------------------------------------------------
 
+\begin{frame}{Detailed NUTS algorithm}
+	
+	
+	\begin{columns}
 
-%  \begin{frame}{The cluster operative}
-% 	\begin{tikzpicture}[remember picture,overlay]
-% 		% Cloud Veneto - in alto a destra
-% 		\node[anchor=north east] at ([xshift=-0.8cm,yshift=0.1cm]current page.north east) {
-% 			\includegraphics[width=2cm]{images/immagini_tommaso/cloud_veneto_logo.png}
-% 		};
-% 	\end{tikzpicture}
-
-% 	\begin{columns}
-
-%         \begin{column}{0.5\textwidth}
-%         \small
+        \begin{column}{0.53\textwidth}
+        \small
 		
-% 			\begin{itemize}
-% 				\item The cluster is started using \emph{Dask} function \texttt{SSHCluster}. 
-% 				\item The scheduler connects to the workers using \emph{SSH} protocol, so that the workers can be started remotely.
-% 				\item The scheduler is started on \textbf{ALICE} and it connects to the workers on the other machines, using their aliases, mapped to their IPs in the ssh configuration file.
-% 			\end{itemize}
+		Given $\mathcal{B}$, set of position-momentum states traced by the leapfrog integrator, we pick deterministicly $\mathcal{C}$, the set of candidate points.
+		\pause
+			\begin{itemize}
+				\item Transitions between states in $\mathcal{C}$ must preserve proability volume and satisfy detailed balance.
+				\pause
+				\item The starting position-momentum state $(\theta, r)$ is added to $\mathcal{C}$.
+				\pause
+				\item Each point in $\mathcal{C}$ must satisfy the slice variable condition $exp{\mathcal{L}(\theta)-\frac{1}{2}r\cdot r} \geq u$.
+				\pause
+				\item Each point in $\mathcal{C}$ must have the same probability of constructing the trajectory $\mathcal{B}$ and candidate set $\mathcal{C}$.
+			\end{itemize}
 
-% 		\end{column}
-% 		\pause
-%         \begin{column}{0.5\textwidth}
-%             \centering
-%             \includegraphics[width=1.1\textwidth]{images/immagini_leonardo/Cluster_Details.png}
-% 			\small 
-% 			Specific properties of the running cluster
-%         \end{column}    
-%     \end{columns}
-% \end{frame}
+		\end{column}
+		
+        \begin{column}<1->{0.47\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1.1\textwidth]{images/immagini_leonardo/NUTS_algorithmNaive.png} 
+				};
+			\end{tikzpicture}
+
+        \end{column}    
+    \end{columns}
+
+\end{frame}
 
 %----------------------------------------------------------------------------------------------------
 
-% \begin{frame}{The "big data" problem}
+\begin{frame}{Detailed NUTS algorithm}
 	
-% 	\begin{center}
-		
-% 		\begin{tcolorbox}[colback=blue!10, colframe=blue!60, rounded corners]
-% 			\centering
-% 			\Large{Inherent sequential nature of \emph{k-means++} !}	
-% 		\end{tcolorbox}
-		
-% 		\pause
-% 		\vspace{1pt}
-% 		\(\Downarrow\)
-% 		\vspace{1pt}\\
-% 		\includegraphics[width=1\textwidth]{images/immagini_tommaso/art_alg_02.png}
-		
-% 	\end{center}
-		% \vspace{1pt}
-		% \(\Downarrow\)
-		% \vspace{1pt}\\
-% \end{frame}
+	\begin{columns}
 
+        \begin{column}{0.53\textwidth}
+        \small
 
-% % Model----------------------------------------------------------------------------------------------
-% \begin{frame}{The datasets}
-% 	We used two datasets to test and evaluate performances:
-% 	\pause
-% 	\begin{itemize}
-% 		\item \textbf{Gaussian mixture}\\
-% 			This dataset is made of $2 \times 10^6$ points (64 MB) in $N$ dimension and they are Gaussian distributed. To test the code we used also smaller versions of the dataset.
-% 		\pause
-% 		\item \textbf{KDD Cup 1999}\\
-% 			This datset is commonly used in ML and in algorithms evaluation. It consist of $4.8 \times 10^6$ points (743 MB) in 42 dimensions. Three of them are categorical variables, so in the code we implemented a method to load the dataset without them or transform the categorial dimensions using the one-hot encoding standard. To test the code in local clusters we used a smaller version of the code importing only the $10\%$ of the dataset. 
-% 	\end{itemize}
-% \end{frame}
+		We can ensure that with the following procedure at iteration $t$:
+		\pause
+			\begin{itemize}
+				\item Sample $r \sim \mathcal{N}(0, I)$,
+				\pause	
+				\item $u \sim \mathcal{U}(0, exp{\mathcal{L}(\theta^t)-\frac{1}{2}r\cdot r})$.
+				\pause
+				\item Sample $\mathcal{B}, \mathcal{C} \sim p(\mathcal{B}, \mathcal{C} | \theta^t, r, u, \epsilon)$.
+				\pause
+				\item Sample $\theta^{t+1}, r \sim T(\theta^t, r, \mathcal{C})$, transition kernel.
+			\end{itemize}
+		\pause
+		Where the transition kernel $T(\theta, r, \mathcal{C})$ has leave the distribution over $\mathcal{C}$ invariant, valid because $\epsilon$ is uniform on the elements of $\mathcal{C}$ and $p(\theta, r | u, \mathcal{B}, \mathcal{C}, \epsilon) \propto \mathbb{I}[(\theta, r)\in \mathcal{C}] $.
 
+		\end{column}
+		
+        \begin{column}<1->{0.47\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1.1\textwidth]{images/immagini_leonardo/NUTS_algorithmNaive.png} 
+				};
+			\end{tikzpicture}
 
-% \begin{frame}{Computational framework}
-% 	\begin{tikzpicture}
-		
-% 		\pause
-% 		% In alto a sinistra
-% 		\node at ([xshift=-4cm,yshift=3cm]current page.center) {
-% 			\includegraphics[width=6cm]{images/immagini_tommaso/python_logo.png}
-% 		};
-		
-% 		\pause
-% 		% Python - in alto a destra
-% 		\node at ([xshift=1cm,yshift=1.5cm]current page.center) {
-% 			\includegraphics[width=5cm]{images/immagini_tommaso/dask_logo.png}
-% 		};
-		
-% 		\pause
-% 		% Dask - in basso a sinistra
-% 		\node at ([xshift=-4cm,yshift=-0.5cm]current page.center) {
-% 			\includegraphics[width=6cm]{images/immagini_tommaso/docker_logo.png}
-% 		};
-		
-% 		\pause
-% 		% Docker - in basso a destra
-% 		\node at ([xshift=1.5cm,yshift=-2cm]current page.center) {
-% 			\includegraphics[width=4cm]{images/immagini_tommaso/cloud_veneto_logo.png}
-% 		};
-		
-% 	\end{tikzpicture}
-% \end{frame}
+        \end{column}    
+    \end{columns}
 
+\end{frame}
 
-% % Model----------------------------------------------------------------------------------------------
-% \begin{frame}{The Cluster Environment}
-% 	To challenge the performances of the algorithm we decided to work on a small cluster on Cloud Veneto, runned on 4 Virtual Machines (VMs) with the following configuration:
-% 	\begin{tikzpicture}[remember picture,overlay]
-% 		% Cloud Veneto - in alto a destra
-% 		\node[anchor=north east] at ([xshift=-0.8cm,yshift=0.1cm]current page.north east) {
-% 			\includegraphics[width=2cm]{images/immagini_tommaso/cloud_veneto_logo.png}
-% 		};
-% 	\end{tikzpicture}
-% 	\pause
-% 	\begin{itemize}
-% 		\item \textbf{ALICE}: 2 CPU cores, 4 GB RAM, IP:220, alias \emph{scheduler}
-% 		\begin{itemize}
-% 			\item It hosts the \emph{scheduler} and \emph{client} of the cluster, it is the VM to which we connect from outside the cluster.
-% 			\item It is used to host two \emph{Dask workers}, one for each CPU core.\\ 2 X (1 CPU core, 2 GB RAM)
-% 		\end{itemize}
-% 	\pause
-% 		\item \textbf{WORKER1}: 1 CPU core, 2 GB RAM, IP:160, alias \emph{worker1}
-% 		\item \textbf{WORKER2}: 1 CPU core, 2 GB RAM, IP:176, alias \emph{worker2}
-% 		\item \textbf{WORKER3}: 1 CPU core, 2 GB RAM, IP:218, alias \emph{worker3}
-% 	\end{itemize}
-% 	\pause
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{Detailed NUTS algorithm}
 	
-% 	The total cluster can use a total of 5 CPU cores and 10 GB RAM, not very impressive compared to a modern laptop.
-% \end{frame}
+	\begin{columns}
 
-% %----------------------------------------------------------------------------------------------------
+        \begin{column}{0.53\textwidth}
+        \small
 
+		The trajectory $\mathcal{B}$ is built with a doubling binary tree structure:
+		\pause
+			\begin{itemize}
+				\item First a single node for the starting state.
+				\pause
+				\item Each iteration $j$ preoceeds with in a direction $v_j \sim \mathcal{U}({-1, 1})$ taking $2^j$ Leapfrog steps.
+				\pause
+				\item The iteration stops when the trajectory starts to double back on itself
+				\pause
+				\item or when the error in the simulation becomes too large, $\mathcal{L}(\theta)-\frac{1}{2}r\cdot r - \log{u} < -\Delta_{max}$.
+			\end{itemize}
+			\pause
+			The doubling process defines the distribution $p(\mathcal{B} | \theta^t, r, u, \epsilon)$.
 
-% \begin{frame}{The cluster setup}
-% 	\begin{tikzpicture}[remember picture,overlay]
-% 		% Cloud Veneto - in alto a destra
-% 		\node[anchor=north east] at ([xshift=-0.8cm,yshift=0.1cm]current page.north east) {
-% 			\includegraphics[width=2cm]{images/immagini_tommaso/cloud_veneto_logo.png}
-% 		};
-% 	\end{tikzpicture}
-
-% 	\begin{itemize}
-% 		\item In each machine we ensured to have the same version of the \emph{OS} (ubuntu-24.04-noble-server), of \emph{Python} and related \emph{packages} (including the \emph{Dask} library and dependencies). \\
-% 		\pause
-% 		\item We used a \emph{Miniconda} environment with fixed versions of the packages, saved in a \emph{YAML} file.
-% 	\end{itemize}
-
-% 	\centering
-%     \includegraphics[width=0.75\textwidth]{images/immagini_leonardo/Dask_dashboard_example.png}
-
-% \end{frame}
-
-% %----------------------------------------------------------------------------------------------------
-
-% \begin{frame}{The cluster setup}
-% 	\begin{tikzpicture}[remember picture,overlay]
-% 		% Cloud Veneto - in alto a destra
-% 		\node[anchor=north east] at ([xshift=-0.8cm,yshift=0.1cm]current page.north east) {
-% 			\includegraphics[width=2cm]{images/immagini_tommaso/cloud_veneto_logo.png}
-% 		};
-% 	\end{tikzpicture}
-% 	To enable the parallelized read of the datasets, we established a network file system \emph{NFS}.
-% 	\pause
-% 	\begin{itemize}
-% 		\item On \textbf{ALICE} was setup a nfs server, hosting a shared folder with the dataset, enabling the other machines to also write on it.
-% 		\pause
-% 		\item Each worker machine mounts the shared folder in the same path as the scheduler, so that the code can access the datasets without any modification.
-% 		\pause
-% 		\item The shared folder is mounted to be \textit{syncronous}, so that the read and write operations are done in a safe way, and with \textit{reconnectivity} attempts for robustness.
-% 	\end{itemize}
-% \end{frame}
-
-% %----------------------------------------------------------------------------------------------------
-
-% \begin{frame}{The cluster operative}
-% 	\begin{tikzpicture}[remember picture,overlay]
-% 		% Cloud Veneto - in alto a destra
-% 		\node[anchor=north east] at ([xshift=-0.8cm,yshift=0.1cm]current page.north east) {
-% 			\includegraphics[width=2cm]{images/immagini_tommaso/cloud_veneto_logo.png}
-% 		};
-% 	\end{tikzpicture}
-
-% 	\begin{columns}
-
-%         \begin{column}{0.5\textwidth}
-%         \small
+		\end{column}
 		
-% 			\begin{itemize}
-% 				\item The cluster is started using \emph{Dask} function \texttt{SSHCluster}. 
-% 				\item The scheduler connects to the workers using \emph{SSH} protocol, so that the workers can be started remotely.
-% 				\item The scheduler is started on \textbf{ALICE} and it connects to the workers on the other machines, using their aliases, mapped to their IPs in the ssh configuration file.
-% 			\end{itemize}
+        \begin{column}<1->{0.47\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1.1\textwidth]{images/immagini_leonardo/NUTS_algorithmNaive.png} 
+				};
+			\end{tikzpicture}
 
-% 		\end{column}
-% 		\pause
-%         \begin{column}{0.5\textwidth}
-%             \centering
-%             \includegraphics[width=1.1\textwidth]{images/immagini_leonardo/Cluster_Details.png}
-% 			\small 
-% 			Specific properties of the running cluster
-%         \end{column}    
-%     \end{columns}
-% \end{frame}
+        \end{column}    
+    \end{columns}
 
-% %----------------------------------------------------------------------------------------------------
+\end{frame}
 
-% \begin{frame}{The cluster mirror image}
-% 	\begin{tikzpicture}[remember picture,overlay]
-% 		% Cloud Veneto - in alto a destra
-% 		\node[anchor=north east] at ([xshift=-0.8cm,yshift=-0.7cm]current page.north east) {
-% 			\includegraphics[width=3cm]{images/immagini_tommaso/docker_logo.png}
-% 		};
-% 	\end{tikzpicture}
+%----------------------------------------------------------------------------------------------------
 
-% 	\begin{itemize}
-% 		\item For the preliminary tests on developing functions, and to continue working while Cloud Veneto is not available, we created a mirror image of the cluster on our local machines using \emph{Docker} containers.
-% 		\pause
-% 		\item Staring from the same base image, made to match the cluster environment (OS, Python version, conda environment), we created a \textit{scheduler} image, a \textit{worker} image and a \textit{jupyter} (client) image, uploading them on \texttt{docker-hub}.
-% 		\pause
-% 		\item To mimic the cluster, we limited the resources of the containers to match the cluster ones, and we created a \texttt{Docker-compose} to allow the containers to communicate with each other via logical ports. \\
-% 		(The dask cluster was not the same as the one on Cloud Veneto, but it was enough to test the code).
-% 	\end{itemize}
+\begin{frame}{Detailed NUTS algorithm}
 	
-% \end{frame}
+	\begin{columns}
 
+        \begin{column}{0.55\textwidth}
+        \small
+
+			\begin{itemize}
+				\item NUTS algorithm repeatedly calls the BuildTree function, returning left and right endpoints of the trajectory, and all visited states $\mathcal{C'}$.
+				\pause
+				\item If one of the two stepping conditions is met, the algorithm terminates and the new candidates $\mathcal{C'}$ are rejected.
+				\pause
+				\item Otherwise, the new candidates $\mathcal{C'}$ are added to the set of candidate points $\mathcal{C}$.
+				\pause
+				\item If a global U turn condition is met, the doubling process is terminated.
+				\pause
+				\item The new position-momentum state $(\theta^{t+1}, r)$ is sampled from the set of candidate points $\mathcal{C}$.
+			\end{itemize}
+			
+
+		\end{column}
+		
+        \begin{column}<1->{0.47\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1.1\textwidth]{images/immagini_leonardo/NUTS_algorithmNaive.png} 
+				};
+			\end{tikzpicture} \\
+
+        \end{column}    
+    \end{columns}
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{Optimized NUTS algorithm}
+	
+	\begin{columns}
+
+		
+        \begin{column}{0.5\textwidth}
+        \small
+		
+		Some optimizations can be made to the NUTS algorithm:
+		\pause
+			\begin{itemize}
+				\item Early stopping when a stopping criterion is met mid-process.
+				\pause
+				\item Single Proposed State kept in memory, by sampling a candidate for each subtree and drawing from them using their relative weights (i.e. the size of the subtree).
+				\pause
+				\item Adaptive tuning of the step size parameter $\epsilon$, using dual averaging.
+			\end{itemize}
+			
+
+		\end{column}
+		
+        \begin{column}<1->{0.5\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1\textwidth]{images/immagini_leonardo/NUTS_algorithm.png} 
+				};
+			\end{tikzpicture} \\
+
+        \end{column}    
+    \end{columns}
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{Dual Averaging for $\epsilon$}
+	
+
+	\small
+	$\epsilon$ is set using stochastic optimization with vanishing adaptation.
+	\pause
+
+	\begin{columns}
+
+		
+        \begin{column}{0.5\textwidth}
+        \small
+		
+		
+			\begin{itemize}
+				\item Defining an expectation $h(\epsilon) = \mathbb{E}_{t}[H_t |x] = \lim_{T \to \infty} \frac{1}{T} \sum_{t=1}^T \mathbb{E}_{t}[H_t | x]$.
+				\pause
+				\item Using the desired acceptance probability $\delta$ to define the error $H_t = \delta - \alpha_t$, where $\alpha_t$ is the acceptance probability at iteration $t$.
+				\pause
+				\item Updating the parameter with the statistics $H_t$: $x_{t+1} \leftarrow \mu - \frac{\sqrt{t}}{\gamma}\frac{1}{t +t_0}\sum_{i=1}^{t}H_i$, $\bar{x}_{t+1} \leftarrow \bar{x}_t + \eta_t x_{t+1} + (1 - \eta_t )\bar{x}_t$ with $\eta_t = t^{-k}$. 
+			\end{itemize}
+			
+
+		\end{column}
+		
+        \begin{column}<1->{0.5\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1.1\textwidth]{images/immagini_leonardo/Dual_Averaging.png} 
+				};
+			\end{tikzpicture} \\
+        \end{column}    
+    
+	
+	\end{columns}
+	\pause
+	\small
+	\vspace{1pt}
+	$\mu=\log{10\epsilon_1}$ is a freely chosen point, $\gamma = 0.05$ is a free parameter for the speed of convergence, and $t_0=10$ is a free parameter that stabilizes the initial iterations and $k=0.75 \in (0.5, 1]$.
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{Heuristic function for $\epsilon$}
+	
+
+	\small
+	Convergence of Dual Averaging for $\epsilon$ is faster starting from a reasonable setting of parameters.
+	\pause
+
+	\begin{columns}
+
+		
+        \begin{column}{0.5\textwidth}
+        \small
+		
+		
+			\begin{itemize}
+				\item This heuristic doubles or halves the value of $\epsilon_1$ until the acceptance probability of the Langevin (Leapfrog) proposal crosses 0.5.
+				\pause
+				\item NUTS does not have a single acceptance probability, so we use an average HMC acceptance probability over the final doubling iteration states.
+			\end{itemize}
+			
+
+		\end{column}
+		
+        \begin{column}<1->{0.55\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1\textwidth]{images/immagini_leonardo/Reasonable_Epsilon.png} 
+				};
+			\end{tikzpicture} \\
+			\pause
+			\vspace{3pt}
+			$H^{NUTS}=\frac{1}{|\mathcal{B}_t^{f}|}\sum_{\theta, r \in \mathcal{B}_t^{f}} \min{1, \frac{\pi(\theta, r)}{\pi(\theta_{t-1}, r_{t}^{0})}}$.
+		\end{column}    
+    
+	
+	\end{columns}
+	\small
+	\vspace{3pt}
+	\pause
+	We can use Dual Averaging with $H_t = \delta - H^{NUTS}$ and $x_t = \log{\epsilon_t}$ to coerce the average of $H^{NUTS}$ to $\delta$. \\
+	\pause
+	\vspace{3pt}
+	Now the algorithm only requires an acceptance probability $\delta$ as input, and a number of iterations $M^{adapt}$ for the adaptation phase.
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
 
 \end{document}
 
