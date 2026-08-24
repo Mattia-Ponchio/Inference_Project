@@ -25,6 +25,14 @@
 	breaklines=true
 }
 
+\lstset{
+	tabsize=2,
+	keepspaces=true,
+	xleftmargin=1em,
+	basicstyle=\ttfamily\small
+}
+
+
 % -----------------------------
 % Definizione colori personalizzati
 % -----------------------------
@@ -49,6 +57,9 @@
 \title{Correspondence between NUTS implemented by hand and the Gellmann's article}
 \author{Tommaso Pirazzo}
 \date{}
+\SetAlgoNoEnd
+\SetAlgoNoLine
+\DontPrintSemicolon
 
 \begin{document}
 	
@@ -60,6 +71,38 @@
 
 \section{Leapfrog integrator}
 
+\begin{algorithm}[H]
+	\caption{Leapfrog Integrator}
+	\KwIn{Position $\theta$, momentum $r$, step size $\epsilon$}
+	\KwOut{Updated $(\theta, r)$}
+	
+	% Half-step momentum update
+	$\tilde{r} \leftarrow r + \frac{\epsilon}{2} \nabla_{\theta} L(\theta)$
+	\BlueCommentInline{$L(\theta) = \log p(\theta)$}\
+	% Full-step position update
+	$\tilde{\theta} \leftarrow \theta + \epsilon \, \tilde{r}$\
+	
+	% Half-step momentum update (using gradient at new position)
+	$\tilde{r} \leftarrow \tilde{r} + \frac{\epsilon}{2} \nabla_{\theta} L(\tilde{\theta})$ \
+	\Return{$(\theta, r)$}\
+
+\end{algorithm}
+
+\vspace{.5cm}
+
+\begin{lstlisting}
+def Leapfrog(theta, r, epsilon):
+	# half-step momentum
+	p = r + 0.5 * epsilon * grad_L(theta)
+
+	# full-step position
+	q = theta + epsilon * p
+
+	# half-step momentum
+	p = p + 0.5 * epsilon * grad_L(q)
+
+	return q, p
+\end{lstlisting}
 	
 \section{FindReasonableEpsilon}
 	
@@ -103,52 +146,57 @@
 		
 	\end{algorithm}
 
+\vspace{.5cm}
+
 \begin{lstlisting}
 def FindReasonableEpsilon(theta, key) :
- assert theta.ndim == 1
+	assert theta.ndim == 1
 			
- # sample momentum r ~ N(0, I)
- key, subkey = jrnd.split(key)
- r = jrnd.normal(subkey, shape=theta.shape)
+	# sample momentum r ~ N(0, I)
+	key, subkey = jrnd.split(key)
+	r = jrnd.normal(subkey, shape=theta.shape)
 				
- # initial epsilon
- epsilon = 1.0
+	# initial epsilon
+	epsilon = 1.0
 				
- # compute initial log joint density
- E0 = log_p(theta, r)
+	# compute initial log joint density
+	E0 = log_p(theta, r)
 				
- # one leapfrog step
- theta_prime, r_prime = Leapfrog(theta, r, epsilon)
- E1 = log_p(theta_prime, r_prime)
+	# one leapfrog step
+	theta_prime, r_prime = Leapfrog(theta, r, epsilon)
+	E1 = log_p(theta_prime, r_prime)
 				
- # log acceptance probability
- log_accept = E1 - E0
+	# log acceptance probability
+	log_accept = E1 - E0
 				
- # direction: +1 (increase) or -1 (decrease)
- a = jnp.where(log_accept > jnp.log(0.5), 1.0, -1.0)
+	# direction: +1 (increase) or -1 (decrease)
+	# equivalent to the "if" logic of the pseudo-code
+	a = jnp.where(log_accept > jnp.log(0.5), 1.0, -1.0)
 				
- # -------------------------------
- # cond_fun: while loop condition
- # -------------------------------
- def cond_fun(state):
-  eps, log_acc = state
-  return (a * log_acc) > (-a * jnp.log(2.0))
+	# -------------------------------
+	# cond_fun: while loop condition
+	# -------------------------------
+	def cond_fun(state):
+		eps, log_acc = state
+		return (a * log_acc) > (-a * jnp.log(2.0))
 				
- # --------------------
- # body_fun: loop body
- # --------------------
- def body_fun(state):
-  eps, _ = state
-  eps = eps * (2.0 ** a)
-  theta_p, r_p = Leapfrog(theta, r, eps)
-  E1 = log_p(theta_p, r_p)
-  log_acc = E1 - E0
-  return (eps, log_acc)
+	# --------------------
+	# body_fun: loop body
+	# --------------------
+	def body_fun(state):
+		eps, _ = state
+		eps = eps * (2.0 ** a)
+		theta_p, r_p = Leapfrog(theta, r, eps)
+		E1 = log_p(theta_p, r_p)
+		log_acc = E1 - E0
+		return (eps, log_acc)
+  
+	# --------------------				
+	# while loop in JAX 
+	# -------------------
+	epsilon, _ = jax.lax.while_loop(cond_fun, body_fun, (epsilon, log_accept))
 				
- # while loop in JAX
- epsilon, _ = jax.lax.while_loop(cond_fun, body_fun, (epsilon, log_accept))
-				
- return epsilon
+	return epsilon
 \end{lstlisting}
 
 \section{BuildTree}
@@ -159,82 +207,328 @@ This pseudo-code is referred to the \verb*|BuildTree| function implemented in th
 \end{itemize}
 The "base case" is implemented before in the function \verb*|build_tree_base| and then called in the complete function \verb*|BuildTree|. 
 
-	\begin{algorithm}[H]
-		\caption{BuildTree$(\theta, r, u, v, j, \epsilon)$}
-		\KwIn{Position $\theta$, momentum $r$, slice variable $u$, direction $v \in \{-1,+1\}$, depth $j$, step size $\epsilon$}
-		\KwOut{
-			$(\theta^-, r^-)$, $(\theta^+, r^+)$, candidate $\theta'$, 
-			number of valid points $n'$, stop flag $s'$, 
-			acceptance sum $\alpha'$, acceptance count $n_\alpha'$
+\begin{algorithm}[H]
+	\caption{BuildTree$(\theta, r, u, v, j, \epsilon, \theta_0, r_0)$}
+	\KwIn{
+		Position $\theta$, momentum $r$, slice variable $u$, 
+		direction $v \in \{-1,+1\}$, depth $j$, step size $\epsilon$, 
+		reference state $(\theta_0, r_0)$
+	}
+	\KwOut{
+		$(\theta^-, r^-)$, $(\theta^+, r^+)$, candidate $\theta'$, 
+		number of valid points $n'$, stop flag $s'$, 
+		acceptance sum $\alpha'$, acceptance count $n_\alpha'$
+	}
+	\GrayComment{Base case}
+	\If{$j = 0$}{  \RedCommentInline{build\_tree\_base}
+		% Base case: single leapfrog step
+		$(\theta', r') \leftarrow \text{Leapfrog}(\theta, r, v \cdot \epsilon)$ \\
+		$E' \leftarrow \log p(\theta', r')$
+		
+		% Slice test
+		$n' \leftarrow \mathbb{I}\left[\log{u} \leq E'\right]$
+		
+		% Stop criterion (turning)
+		$s' \leftarrow \mathbb{I}\left[\log{u} < \Delta_{max} + E'\right]$
+		
+		% Acceptance statistics
+		$\Delta \leftarrow E' - \log p(\theta_0, r_0)$ \\
+		$\alpha' \leftarrow \min\{1, \exp(\Delta)\}$ \\
+		$n_\alpha' \leftarrow 1$ \\
+		
+		\Return{
+			$(\theta', r')$, $(\theta', r')$, $\theta'$, 
+			n', s', $\alpha'$, $n_\alpha'$
 		}
-		
-		\If{$j = 0$}{
-			% Base case: single leapfrog step
-			$(\theta', r') \leftarrow \text{Leapfrog}(\theta, r, v \cdot \epsilon)$\;
-			$E' \leftarrow \log p(\theta', r')$\;
-			
-			% Slice test
-			$n' \leftarrow \mathbb{I}\left[u < \exp(E')\right]$\;
-			
-			% Stop criterion (turning)
-			$s' \leftarrow \mathbb{I}\left[u < \exp(E')\right]$\;
-			
-			% Acceptance statistics
-			$\Delta \leftarrow E' - \log p(\theta, r)$\;
-			$\alpha' \leftarrow \min\{1, \exp(\Delta)\}$\;
-			$n_\alpha' \leftarrow 1$\;
-			
-			\Return{
-				$(\theta', r')$, $(\theta', r')$, $\theta'$, 
-				$n'$, $s'$, $\alpha'$, $n_\alpha'$
-			}\;
-		}
-		
-		% Recursive case: build left subtree
-		$(\theta^-, r^-), (\theta^+, r^+), \theta', 
-		n', s', \alpha', n_\alpha' 
-		\leftarrow \text{BuildTree}(\theta, r, u, v, j-1, \epsilon)$\;
-		
-		\If{$s' = 1$}{
-			\Return{
-				$(\theta^-, r^-), (\theta^+, r^+), \theta', 
-				n', s', \alpha', n_\alpha'$
-			}\;
-		}
-		
-		% Build right subtree
-		\eIf{$v = -1$}{
-			$(\theta^-, r^-), (\_, \_), \theta'', 
-			n'', s'', \alpha'', n_\alpha'' 
-			\leftarrow \text{BuildTree}(\theta^-, r^-, u, v, j-1, \epsilon)$\;
-		}{
-			$(\_, \_), (\theta^+, r^+), \theta'', 
-			n'', s'', \alpha'', n_\alpha'' 
-			\leftarrow \text{BuildTree}(\theta^+, r^+, u, v, j-1, \epsilon)$\;
-		}
-		
-		% Uniform choice of candidate
-		$p \leftarrow \frac{n''}{n' + n''}$\;
-		\If{\text{Bernoulli}(p)}{
-			$\theta' \leftarrow \theta''$\;
-		}
-		
-		% Combine statistics
-		$n' \leftarrow n' + n''$\;
-		$s' \leftarrow s' \cdot s'' \cdot 
-		\text{Turning}(\theta^-, r^-, \theta^+, r^+)$\;
-		$\alpha' \leftarrow \alpha' + \alpha''$\;
-		$n_\alpha' \leftarrow n_\alpha' + n_\alpha''$\;
-		
+	}
+	
+	% Recursive case: build left subtree
+	\GrayComment{Recursive case}
+	$(\theta^-, r^-), (\theta^+, r^+), \theta', 
+	n', s', \alpha', n_\alpha' 
+	\leftarrow \text{BuildTree}(\theta, r, u, v, j-1, \epsilon, \theta_0, r_0)$
+	
+	\If{$s' = 0$}{
 		\Return{
 			$(\theta^-, r^-), (\theta^+, r^+), \theta', 
 			n', s', \alpha', n_\alpha'$
-		}\;
-		
-	\end{algorithm}
+		}
+	}
 	
+	% Build right subtree
+	\eIf{$v = -1$}{
+		$(\theta^-, r^-), (\_, \_), \theta'', 
+		n'', s'', \alpha'', n_\alpha'' 
+		\leftarrow \text{BuildTree}(\theta^-, r^-, u, v, j-1, \epsilon, \theta_0, r_0)$
+	}{
+		$(\_, \_), (\theta^+, r^+), \theta'', 
+		n'', s'', \alpha'', n_\alpha'' 
+		\leftarrow \text{BuildTree}(\theta^+, r^+, u, v, j-1, \epsilon, \theta_0, r_0)$
+	}
+	
+	% Uniform choice of candidate
+	$p \leftarrow \frac{n''}{n' + n''}$
+	\If{\text{Bernoulli}(p)}{
+		$\theta' \leftarrow \theta''$
+	}
+	
+	% Combine statistics
+	$n' \leftarrow n' + n''$\\
+	$s' \leftarrow s' \cdot s'' \cdot 
+	\text{Turning}(\theta^-, r^-, \theta^+, r^+)$ \\
+	$\alpha' \leftarrow \alpha' + \alpha''$ \\
+	$n_\alpha' \leftarrow n_\alpha' + n_\alpha''$ \\
+	
+	\Return{
+		$(\theta^-, r^-), (\theta^+, r^+), \theta', 
+		n', s', \alpha', n_\alpha'$
+	}
+	
+	\end{algorithm}
+
+\vspace{.5cm}
+
+\begin{lstlisting}
+def build_tree_base(root: Root) -> Tree:
+	theta, r = root.theta, root.r
+	u, v = root.u, root.v
+	eps = root.epsilon
+	theta0, r0 = root.theta_0, root.r_0
+
+	# leapfrog step
+	theta_p, r_p = Leapfrog(theta, r, v * eps)
+
+	logu = jnp.log(u)
+	lp = log_p(theta_p, r_p)
+
+	# valid point?
+	n_p = (logu <= lp).astype(jnp.int32)
+
+	# non-divergent?
+	s_p = (logu < (1000.0 + lp)).astype(jnp.int32)
+
+	# acceptance statistic
+ 	delta = (
+ 		L(theta_p) - 0.5 * jnp.dot(r_p, r_p)
+ 		- L(theta0) + 0.5 * jnp.dot(r0, r0))
+ 		
+	alpha_p = jnp.minimum(1.0, jnp.exp(delta))
+	n_a_p = jnp.array(1, dtype=jnp.int32)
+
+	return Tree(
+		theta_minus=theta_p,
+		r_minus=r_p,
+		theta_plus=theta_p,
+		r_plus=r_p,
+		theta_prime=theta_p,
+		n_prime=n_p,
+		s_prime=s_p,
+		alpha_prime=alpha_p,
+		n_a_prime=n_a_p,
+	)
+\end{lstlisting}
+
+\vspace{.5cm}
+
+\begin{lstlisting}[xleftmargin=-1.5cm, xrightmargin=-1.5cm, linewidth=1.05\textwidth]
+def BuildTree(root: Root, key: jnp.ndarray):
+
+	def build_base(_):
+		return build_tree_base(root), key
+
+	def build_iter(_):
+
+		base_tree = build_tree_base(root)
+
+		state = TreeState(
+			theta_minus=base_tree.theta_minus,
+			r_minus=base_tree.r_minus,
+			theta_plus=base_tree.theta_plus,
+			r_plus=base_tree.r_plus,
+			theta_prime=base_tree.theta_prime,
+			n_prime=base_tree.n_prime,
+			s_prime=base_tree.s_prime,
+			alpha_prime=base_tree.alpha_prime,
+			n_a_prime=base_tree.n_a_prime,
+			key=key,
+		)
+		
+		# body function of the iterative case
+		def body_fun(depth, state: TreeState):
+
+			def expand_valid(state):
+
+				theta_start = jnp.where(root.v == -1, 
+								state.theta_minus, state.theta_plus)
+				r_start = jnp.where(root.v == -1, 
+							state.r_minus, state.r_plus)
+
+				local_root = Root(
+					theta=theta_start,
+					r=r_start,
+					u=root.u,
+					v=root.v,
+					j=0,
+					epsilon=root.epsilon,
+					theta_0=root.theta_0,
+					r_0=root.r_0,
+				)
+
+				local_tree = build_tree_base(local_root)
+
+				theta_minus = jnp.where(root.v==-1, local_tree.theta_minus, 
+											state.theta_minus)
+				r_minus = jnp.where(root.v==-1, local_tree.r_minus,
+											state.r_minus)
+				theta_plus  = jnp.where(root.v==1, local_tree.theta_plus,
+											state.theta_plus)
+				r_plus = jnp.where(root.v ==  1, local_tree.r_plus,
+											state.r_plus)
+
+				total_n = state.n_prime + local_tree.n_prime
+				p = jnp.where(total_n > 0, 
+						local_tree.n_prime / total_n, 0.5)
+				
+				key, sub = jrnd.split(state.key)
+				choose = jrnd.bernoulli(sub, p)
+				
+				theta_prime = jnp.where(choose, 
+											local_tree.theta_prime, 
+											state.theta_prime)
+				
+				n_prime = state.n_prime + local_tree.n_prime
+				s_prime = state.s_prime * 
+							local_tree.s_prime * 
+							stop_criterion(theta_minus, theta_plus, r_minus, r_plus)
+				alpha_prime = state.alpha_prime + local_tree.alpha_prime
+				n_a_prime  = state.n_a_prime + local_tree.n_a_prime
+
+				return TreeState(
+					theta_minus=theta_minus,
+					r_minus=r_minus,
+					theta_plus=theta_plus,
+					r_plus=r_plus,
+					theta_prime=theta_prime,
+					n_prime=n_prime,
+					s_prime=s_prime,
+					alpha_prime=alpha_prime,
+					n_a_prime=n_a_prime,
+					key=key,
+				)
+
+			return jax.lax.cond(
+				state.s_prime == 1,
+				expand_valid,
+				lambda s: s,
+				operand=state,
+			)
+
+		final_state = jax.lax.fori_loop(1, root.j + 1, body_fun, state)
+
+		merged = Tree(
+			theta_minus=final_state.theta_minus,
+			r_minus=final_state.r_minus,
+			theta_plus=final_state.theta_plus,
+			r_plus=final_state.r_plus,
+			theta_prime=final_state.theta_prime,
+			n_prime=final_state.n_prime,
+			s_prime=final_state.s_prime,
+			alpha_prime=final_state.alpha_prime,
+			n_a_prime=final_state.n_a_prime,
+		)
+
+		return merged, final_state.key
+		
+	# More external "if" condition to select the base/iterative case
+	return jax.lax.cond(
+		root.j == 0,
+		build_base,
+		build_iter,
+		operand=None
+	)
+\end{lstlisting}
+
+\begin{algorithm}[H]
+	\caption{BuildTree (versione iterativa)}
+	\KwIn{State $(\theta, r)$, slice variable $u$, direction $v$, depth $j$, step size $\epsilon$, reference $(\theta_0, r_0)$}
+	\KwOut{$(\theta^-, r^-), (\theta^+, r^+), \theta', n', s', \alpha', n_\alpha'$}
+	
+	% ------------------------------------------------------------
+	% Caso base: livello j = 0
+	% ------------------------------------------------------------
+	\If{$j = 0$}{
+		$(\theta^-, r^-), (\theta^+, r^+), \theta', n', s', \alpha', n_\alpha'$
+		$\leftarrow$ \textsc{BaseTree}$(\theta, r, u, v, \epsilon, \theta_0, r_0)$\;
+		\Return{$(\theta^-, r^-), (\theta^+, r^+), \theta', n', s', \alpha', n_\alpha'$}\;
+	}
+	
+	% ------------------------------------------------------------
+	% Inizializzazione: costruisci il livello 0
+	% ------------------------------------------------------------
+	$(\theta^-, r^-), (\theta^+, r^+), \theta', n', s', \alpha', n_\alpha'$
+	$\leftarrow$ \textsc{BaseTree}$(\theta, r, u, v, \epsilon, \theta_0, r_0)$\;
+	
+	% ------------------------------------------------------------
+	% Espansione iterativa dell'albero fino alla profondità j
+	% ------------------------------------------------------------
+	\For{$\ell \leftarrow 1$ \KwTo $j$}{
+		
+		\If{$s' = 0$}{
+			\textbf{break}\;
+		}
+		
+		% Determina il punto da cui espandere
+		\If{$v = -1$}{
+			$\theta_{\text{start}} \leftarrow \theta^-$\;
+			$r_{\text{start}} \leftarrow r^-$\;
+		}
+		\Else{
+			$\theta_{\text{start}} \leftarrow \theta^+$\;
+			$r_{\text{start}} \leftarrow r^+$\;
+		}
+		
+		% Costruisci un nuovo livello (caso base)
+		$(\theta^-_{\text{loc}}, r^-_{\text{loc}}),
+		(\theta^+_{\text{loc}}, r^+_{\text{loc}}),
+		\theta'_{\text{loc}}, n'_{\text{loc}}, s'_{\text{loc}},
+		\alpha'_{\text{loc}}, n_{\alpha,\text{loc}}$
+		$\leftarrow$ \textsc{BaseTree}$(\theta_{\text{start}}, r_{\text{start}}, u, v, \epsilon, \theta_0, r_0)$\;
+		
+		% Aggiorna i limiti dell'albero
+		\If{$v = -1$}{
+			$\theta^- \leftarrow \theta^-_{\text{loc}}$\;
+			$r^-     \leftarrow r^-_{\text{loc}}$\;
+		}
+		\Else{
+			$\theta^+ \leftarrow \theta^+_{\text{loc}}$\;
+			$r^+     \leftarrow r^+_{\text{loc}}$\;
+		}
+		
+		% Aggiorna il numero di stati validi
+		$n_{\text{tot}} \leftarrow n' + n'_{\text{loc}}$\;
+		
+		% Scegli θ' proporzionalmente a n'
+		$p \leftarrow n'_{\text{loc}} / n_{\text{tot}}$\;
+		\If{\textsc{Bernoulli}$(p)$}{
+			$\theta' \leftarrow \theta'_{\text{loc}}$\;
+		}
+		
+		% Aggiorna statistiche
+		$n' \leftarrow n_{\text{tot}}$\;
+		$s' \leftarrow s' \cdot s'_{\text{loc}} \cdot 
+		\textsc{StopCriterion}(\theta^-, \theta^+, r^-, r^+)$\;
+		$\alpha' \leftarrow \alpha' + \alpha'_{\text{loc}}$\;
+		$n_\alpha' \leftarrow n_\alpha' + n_{\alpha,\text{loc}}$\;
+	}
+	
+	\Return{$(\theta^-, r^-), (\theta^+, r^+), \theta', n', s', \alpha', n_\alpha'$}\;
+	
+\end{algorithm}
+
 
 \section{Final algorithm}	
+
+
 	\begin{algorithm}[H]
 		\caption{No-U-Turn Sampler with Dual Averaging}
 		Given $\theta_0$ , $\delta$, $L$, $M$, $M^{adapt}$ : \\
