@@ -13,3 +13,7 @@ GermanCredit_HLR.ipynb
 
 	- Analysis for the German Credit Dataset with a more complex hierarchical prior
 	- Contains explanation for our procedure and comparison NUTS vs HMC, replicating the results of the paper
+	
+Plotter.ipynb
+
+	- Notebook to plot the results of the analysis on German Credit Dataset.
