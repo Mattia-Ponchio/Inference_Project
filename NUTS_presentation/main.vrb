@@ -1,0 +1,24 @@
+\frametitle{Code implementation}
+
+\begin{lstlisting}
+# Python factorial
+def factorial_recursive(n: int) -> int:
+	if n <= 1:
+		return 1
+	return n * factorial_recursive(n - 1)
+\end{lstlisting}
+
+\pause
+
+\begin{lstlisting}
+# JAX factorial
+import jax
+import jax.numpy as jnp
+from jax import lax
+
+def factorial_jax(n: int):
+	def body(i, acc):
+		return acc * (i + 1)
+	return lax.fori_loop(0, n, body, 1)
+\end{lstlisting}
+	

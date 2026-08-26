@@ -1,0 +1,657 @@
+\documentclass[aspectratio=43]{beamer}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{lmodern}
+\usepackage{booktabs}
+\usepackage{tcolorbox}
+\usepackage{tikz}
+\usepackage[ruled,vlined]{algorithm2e}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+	language=Python,
+	basicstyle=\fontsize{7pt}{8pt}\ttfamily,
+	keywordstyle=\color{blue},
+	commentstyle=\color{gray},
+	stringstyle=\color{red},
+	xleftmargin=0.5em,
+	framexleftmargin=0.5em,
+	showstringspaces=false,
+	tabsize=4
+}
+
+
+
+%import the theme and packages for the code blocks
+\input{code_blocks_theme.tex}
+
+% Use Unipd as theme, with options:
+% - pageofpages: define the separation symbol of the footer page of pages (e.g.: of, di, /, default: of)
+% - logo: position another logo near the Unipd logo in the title page (e.g. department logo), passing the second logo path as option 
+% Use the environment lastframe to add the endframe text
+\usetheme[pageofpages=of]{Unipd}
+
+\title{No U-Turn Sampler}
+\subtitle{Adaptively Setting Path Lengths in Hamiltonian Monte Carlo}
+\author[]{Pieripolli Leonardo, Pirazzo Tommaso, \\
+			Ponchio Mattia, Secco Benedetto}
+
+\date{\today}
+
+
+\begin{document}
+
+% Make the title page
+\frame{\titlepage}
+
+%--------------------------------------------------------------- project part
+\section{Introduction}
+
+\begin{frame}{No U-Turn Sampler}
+	\begin{center}
+		 
+		\emph{HMC} is an \emph{MCMC} algorithm that avoids random walk behavior and sensitivity to correlated parameters.\\ %, by taking a series of steps informed by first-order gradient information. \\
+		However, it requires the tuning of two user-specified parameters: step size $\epsilon$ and number of steps $L$. \\ 
+		
+		\pause
+		%\vspace{1pt}
+		\(\Downarrow\)
+		\vspace{1pt}\\
+		The \emph{No-U-Turn Sampler} (NUTS) is an extension to HMC that eliminates the need to set a number of steps $L$.
+		
+		\pause
+		%\vspace{1pt}
+		\(\Downarrow\)
+		\vspace{1pt}\\
+		\emph{NUTS} uses a recursive algorithm to build a set of candidate points, stopping automatically when it starts retrace its steps. 
+		
+		\pause
+		\begin{tikzpicture}
+			\node[opacity=0.5] {
+				\includegraphics[width=0.6\textwidth]{images/immagini_leonardo/NUTS_diagram.png}
+			};
+		\end{tikzpicture}
+		
+	\end{center}
+	
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{Hamiltonian Monte Carlo}
+	HMC generates proposals with high acceptance probability by suppressing the random walk behavior, but it comes with a price:
+	\pause
+	\begin{itemize}
+		\item Comuputing the gradient of the log-posterior at each step. \\
+		\pause
+		\item Tuning two user-specified parameters: step size $\epsilon$ and number of steps $L$.
+		Tipically, $\epsilon$ can be tuned during warm-up, but $L$ can require costly tuning runs. \\
+	\end{itemize}
+	\pause
+	\centering
+
+	\begin{tikzpicture}
+			\node[opacity=0.75] {
+				    \includegraphics[width=0.75\textwidth]{images/immagini_leonardo/HMC.png}
+			};
+		\end{tikzpicture}
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{No U-Turn HMC}
+	We want a sampler able to retain the HMC suppression on random walk behavior, but without the need to tune the number of Leap Frog steps $L$. \\
+	\pause
+	\begin{itemize}
+		\item Starting from a point in the parameter space $\theta$, the algorithm builds a set of candidate points, doubling the tree size at each iteration. \\
+		\pause
+		\item To detect when to stop, the algorithm checks if the trajectory starts to turn back on itself: given a proposed point $\tilde{\theta}$, the algorithm checks if the dot product of the momentum vectors at $\theta$ and $\tilde{\theta}$ is negative. \\
+		$(\theta - \tilde{\theta}) \cdot \frac{d}{dt}(\theta - \tilde{\theta}) =(\theta - \tilde{\theta}) \cdot \tilde{r} < 0$ \\
+		\pause
+		\item To preserve time reversibility, NUTS runs the Hamiltonian dynamics in both forward and backward directions. \\
+	\end{itemize}
+	
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+\section{NUTS algorithm}
+
+\begin{frame}{Probability slicing}
+	\begin{center}
+		 
+		To simplify the derivation and implementation of the algorithm, NUTS uses a slice variable $u$ with conditional distribution $p(u|\theta, r) = \mathcal{U}(u; [0, exp{\mathcal{L}(\theta)-\frac{1}{2}r\cdot r}]) $. \\ 
+		This way $p(\theta, r | u ) = \mathcal{U}(\theta, r; {\theta', r' | exp{\mathcal{L}(\theta)-\frac{1}{2}r\cdot r} \geq u})$. \\
+		\pause
+		\begin{tikzpicture}
+			\node[opacity=0.75] {
+				\includegraphics[width=0.65\textwidth]{images/immagini_leonardo/NUTS_example.png}
+			};
+		\end{tikzpicture}
+		
+	\end{center}
+	
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{High-level NUTS algorithm}
+	
+	\begin{columns}
+
+        \begin{column}{0.5\textwidth}
+        \small
+		
+			\begin{itemize}
+				\item The algorithm resamples $u|\theta, r$ at each iteration,
+				\pause
+				\item uses Leapfrog integrator to trace a path forward and backwards first 1 step,
+				\pause
+				\item then doubling for successive iterations.
+				\pause
+				\item This doubling process implicitly builds a balanced binary tree whose leaf nodes correspond to position-momentum states.
+				\pause
+				\item The doubling is halted when the subtrajectory starts to double back on itself.
+			\end{itemize}
+
+		\end{column}
+		
+		\begin{column}<1->{0.5\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+		            \includegraphics[width=1\textwidth]{images/immagini_leonardo/NUTS_example.png}
+				};
+			\end{tikzpicture}
+			\small 
+			Example of a NUTS trajectory, with the slice variable $u$.
+        \end{column}    
+    \end{columns}
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{Detailed NUTS algorithm}
+	
+	
+	\begin{columns}
+
+        \begin{column}{0.53\textwidth}
+        \small
+		
+		Given $\mathcal{B}$, set of position-momentum states traced by the leapfrog integrator, we pick deterministicly $\mathcal{C}$, the set of candidate points.
+		\pause
+			\begin{itemize}
+				\item Transitions between states in $\mathcal{C}$ must preserve proability volume and satisfy detailed balance.
+				\pause
+				\item The starting position-momentum state $(\theta, r)$ is added to $\mathcal{C}$.
+				\pause
+				\item Each point in $\mathcal{C}$ must satisfy the slice variable condition $exp{\mathcal{L}(\theta)-\frac{1}{2}r\cdot r} \geq u$.
+				\pause
+				\item Each point in $\mathcal{C}$ must have the same probability of constructing the trajectory $\mathcal{B}$ and candidate set $\mathcal{C}$.
+			\end{itemize}
+
+		\end{column}
+		
+        \begin{column}<1->{0.47\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1.1\textwidth]{images/immagini_leonardo/NUTS_algorithmNaive.png} 
+				};
+			\end{tikzpicture}
+
+        \end{column}    
+    \end{columns}
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{Detailed NUTS algorithm}
+	
+	\begin{columns}
+
+        \begin{column}{0.53\textwidth}
+        \small
+
+		We can ensure that with the following procedure at iteration $t$:
+		\pause
+			\begin{itemize}
+				\item Sample $r \sim \mathcal{N}(0, I)$,
+				\pause	
+				\item $u \sim \mathcal{U}(0, exp{\mathcal{L}(\theta^t)-\frac{1}{2}r\cdot r})$.
+				\pause
+				\item Sample $\mathcal{B}, \mathcal{C} \sim p(\mathcal{B}, \mathcal{C} | \theta^t, r, u, \epsilon)$.
+				\pause
+				\item Sample $\theta^{t+1}, r \sim T(\theta^t, r, \mathcal{C})$, transition kernel.
+			\end{itemize}
+		\pause
+		Where the transition kernel $T(\theta, r, \mathcal{C})$ has leave the distribution over $\mathcal{C}$ invariant, valid because $\epsilon$ is uniform on the elements of $\mathcal{C}$ and $p(\theta, r | u, \mathcal{B}, \mathcal{C}, \epsilon) \propto \mathbb{I}[(\theta, r)\in \mathcal{C}] $.
+
+		\end{column}
+		
+        \begin{column}<1->{0.47\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1.1\textwidth]{images/immagini_leonardo/NUTS_algorithmNaive.png} 
+				};
+			\end{tikzpicture}
+
+        \end{column}    
+    \end{columns}
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{Detailed NUTS algorithm}
+	
+	\begin{columns}
+
+        \begin{column}{0.53\textwidth}
+        \small
+
+		The trajectory $\mathcal{B}$ is built with a doubling binary tree structure:
+		\pause
+			\begin{itemize}
+				\item First a single node for the starting state.
+				\pause
+				\item Each iteration $j$ preoceeds with in a direction $v_j \sim \mathcal{U}({-1, 1})$ taking $2^j$ Leapfrog steps.
+				\pause
+				\item The iteration stops when the trajectory starts to double back on itself
+				\pause
+				\item or when the error in the simulation becomes too large, $\mathcal{L}(\theta)-\frac{1}{2}r\cdot r - \log{u} < -\Delta_{max}$.
+			\end{itemize}
+			\pause
+			The doubling process defines the distribution $p(\mathcal{B} | \theta^t, r, u, \epsilon)$.
+
+		\end{column}
+		
+        \begin{column}<1->{0.47\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1.1\textwidth]{images/immagini_leonardo/NUTS_algorithmNaive.png} 
+				};
+			\end{tikzpicture}
+
+        \end{column}    
+    \end{columns}
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{Detailed NUTS algorithm}
+	
+	\begin{columns}
+
+        \begin{column}{0.55\textwidth}
+        \small
+
+			\begin{itemize}
+				\item NUTS algorithm repeatedly calls the BuildTree function, returning left and right endpoints of the trajectory, and all visited states $\mathcal{C'}$.
+				\pause
+				\item If one of the two stepping conditions is met, the algorithm terminates and the new candidates $\mathcal{C'}$ are rejected.
+				\pause
+				\item Otherwise, the new candidates $\mathcal{C'}$ are added to the set of candidate points $\mathcal{C}$.
+				\pause
+				\item If a global U turn condition is met, the doubling process is terminated.
+				\pause
+				\item The new position-momentum state $(\theta^{t+1}, r)$ is sampled from the set of candidate points $\mathcal{C}$.
+			\end{itemize}
+			
+
+		\end{column}
+		
+        \begin{column}<1->{0.47\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1.1\textwidth]{images/immagini_leonardo/NUTS_algorithmNaive.png} 
+				};
+			\end{tikzpicture} \\
+
+        \end{column}    
+    \end{columns}
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{Optimized NUTS algorithm}
+	
+	\begin{columns}
+
+		
+        \begin{column}{0.5\textwidth}
+        \small
+		
+		Some optimizations can be made to the NUTS algorithm:
+		\pause
+			\begin{itemize}
+				\item Early stopping when a stopping criterion is met mid-process.
+				\pause
+				\item Single Proposed State kept in memory, by sampling a candidate for each subtree and drawing from them using their relative weights (i.e. the size of the subtree).
+				\pause
+				\item Adaptive tuning of the step size parameter $\epsilon$, using dual averaging.
+			\end{itemize}
+			
+
+		\end{column}
+		
+        \begin{column}<1->{0.5\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1\textwidth]{images/immagini_leonardo/NUTS_algorithm.png} 
+				};
+			\end{tikzpicture} \\
+
+        \end{column}    
+    \end{columns}
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{Dual Averaging for $\epsilon$}
+	
+
+	\small
+	$\epsilon$ is set using stochastic optimization with vanishing adaptation.
+	\pause
+
+	\begin{columns}
+
+		
+        \begin{column}{0.5\textwidth}
+        \small
+		
+		
+			\begin{itemize}
+				\item Defining an expectation $h(\epsilon) = \mathbb{E}_{t}[H_t |x] = \lim_{T \to \infty} \frac{1}{T} \sum_{t=1}^T \mathbb{E}_{t}[H_t | x]$.
+				\pause
+				\item Using the desired acceptance probability $\delta$ to define the error $H_t = \delta - \alpha_t$, where $\alpha_t$ is the acceptance probability at iteration $t$.
+				\pause
+				\item Updating the parameter with the statistics $H_t$: $x_{t+1} \leftarrow \mu - \frac{\sqrt{t}}{\gamma}\frac{1}{t +t_0}\sum_{i=1}^{t}H_i$, $\bar{x}_{t+1} \leftarrow \bar{x}_t + \eta_t x_{t+1} + (1 - \eta_t )\bar{x}_t$ with $\eta_t = t^{-k}$. 
+			\end{itemize}
+			
+
+		\end{column}
+		
+        \begin{column}<1->{0.5\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1.1\textwidth]{images/immagini_leonardo/Dual_Averaging.png} 
+				};
+			\end{tikzpicture} \\
+        \end{column}    
+    
+	
+	\end{columns}
+	\pause
+	\small
+	\vspace{1pt}
+	$\mu=\log{10\epsilon_1}$ is a freely chosen point, $\gamma = 0.05$ is a free parameter for the speed of convergence, and $t_0=10$ is a free parameter that stabilizes the initial iterations and $k=0.75 \in (0.5, 1]$.
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{Heuristic function for $\epsilon$}
+	
+
+	\small
+	Convergence of Dual Averaging for $\epsilon$ is faster starting from a reasonable setting of parameters.
+	\pause
+
+	\begin{columns}
+
+		
+        \begin{column}{0.5\textwidth}
+        \small
+		
+		
+			\begin{itemize}
+				\item This heuristic doubles or halves the value of $\epsilon_1$ until the acceptance probability of the Langevin (Leapfrog) proposal crosses 0.5.
+				\pause
+				\item NUTS does not have a single acceptance probability, so we use an average HMC acceptance probability over the final doubling iteration states.
+			\end{itemize}
+			
+
+		\end{column}
+		
+        \begin{column}<1->{0.55\textwidth}
+		\onslide<1->
+            \centering
+			\begin{tikzpicture}
+				\node[opacity=0.75] {
+            		\includegraphics[width=1\textwidth]{images/immagini_leonardo/Reasonable_Epsilon.png} 
+				};
+			\end{tikzpicture} \\
+			\pause
+			\vspace{3pt}
+			$H^{NUTS}=\frac{1}{|\mathcal{B}_t^{f}|}\sum_{\theta, r \in \mathcal{B}_t^{f}} \min{1, \frac{\pi(\theta, r)}{\pi(\theta_{t-1}, r_{t}^{0})}}$.
+		\end{column}    
+    
+	
+	\end{columns}
+	\small
+	\vspace{3pt}
+	\pause
+	We can use Dual Averaging with $H_t = \delta - H^{NUTS}$ and $x_t = \log{\epsilon_t}$ to coerce the average of $H^{NUTS}$ to $\delta$. \\
+	\pause
+	\vspace{3pt}
+	Now the algorithm only requires an acceptance probability $\delta$ as input, and a number of iterations $M^{adapt}$ for the adaptation phase.
+
+\end{frame}
+
+%----------------------------------------------------------------------------------------------------
+
+\begin{frame}{NUTS implementation}
+
+Inorder to implement the algorithm we need some tools:
+
+\begin{itemize}
+	\item Automatic differentiation 
+	\item Vectorial computation for computations in high diemnsion space
+	\item Random number generator 
+	\item Just in time compilation (Not needed but useful...)
+\end{itemize}
+
+\begin{center}
+\pause
+
+\begin{center}
+	\includegraphics[width=0.5\textwidth]{images/immagini_tommaso/JAX_logo.png}
+\end{center}
+
+
+\end{center}
+
+\end{frame}
+
+
+
+
+
+
+\begin{frame}{Python vs JAX}
+\pause	
+	\begin{columns}
+		
+		% ---------------- LEFT COLUMN ----------------
+		\column{0.5\textwidth}
+		{\small
+			\begin{block}{Python (Recursive)}
+				\begin{itemize}
+					\item Natural use of recursion.
+					\item Relies on the call stack.
+					\item Allows side effects.
+					\item Mutable values.
+					\item Dynamic control flow.
+					\item Execution not compilable.
+				\end{itemize}
+			\end{block}
+		}
+\pause		
+		% ---------------- RIGHT COLUMN ----------------
+		\column{0.5\textwidth}
+		{\small
+			\begin{block}{JAX (Iterative \& Functional)}
+				\begin{itemize}
+					\item Recursion not supported by XLA.
+					\item Functional loops (e.g., \texttt{lax.fori\_loop}).
+					\item Pure functions: no side effects.
+					\item Immutable values.
+					\item Static control flow for compilation.
+					\item Works with \texttt{jit}, \texttt{vmap}, \texttt{grad}.
+				\end{itemize}
+			\end{block}
+		}
+		
+	\end{columns}
+	
+\end{frame}
+
+
+
+\begin{frame}{Recurion Vs Iteration}
+	
+\begin{columns}
+	% ---------------- LEFT COLUMN ----------------
+	\column{0.5\textwidth}	
+		\begin{algorithm}[H]
+			\caption{recursion}
+			\KwIn{$n$}
+			\KwOut{$n!$}
+			
+			\If{$n \le 1$}{
+				\Return{1}
+			}
+			\Else{
+				\Return{$n \cdot$ factorial($n-1$)}
+			}
+		\end{algorithm}
+	
+	% ---------------- RIGHT COLUMN ----------------
+	\column{0.5\textwidth}
+		\begin{algorithm}[H]
+			\caption{iteration}
+			\KwIn{$n$}
+			\KwOut{$n!$}
+			
+			$acc \gets 1$ \;
+			\For{$i \gets 1$ \KwTo $n$}{
+				$acc \gets acc \cdot i$ \;
+			}
+			\Return{$acc$}
+		\end{algorithm}
+	\end{columns}
+	
+\end{frame}
+
+
+\begin{frame}[fragile]{Code implementation}
+	
+\begin{lstlisting}
+# Python factorial
+def factorial_recursive(n: int) -> int:
+	if n <= 1:
+		return 1
+	return n * factorial_recursive(n - 1)
+\end{lstlisting}
+
+\pause
+
+\begin{lstlisting}
+# JAX factorial
+import jax
+import jax.numpy as jnp
+from jax import lax
+
+def factorial_jax(n: int):
+	def body(i, acc):
+		return acc * (i + 1)
+	return lax.fori_loop(0, n, body, 1)
+\end{lstlisting}
+	
+\end{frame}
+
+% presentazione delle funzioni principali
+
+\begin{frame}{\large{NUTS Architecture Overview — Part I}}
+	
+	{\small
+		
+		\begin{block}{1. Base Components}
+			\texttt{log\_p}: Joint log-density \(L(\theta) - \frac12 r^T r\).  
+			\texttt{stop\_criterion}: Detects U-turns to stop tree expansion.  
+			\texttt{Leapfrog}: Hamiltonian integrator (reversible, volume-preserving).
+		\end{block}
+		
+		\begin{block}{2. Tree Construction}
+			\texttt{build\_tree\_base}: Depth-0 subtree via one leapfrog step.  
+			\texttt{BuildTree}: Recursive tree expansion using \texttt{lax.fori\_loop};  
+			aggregates valid states, acceptance stats, and U-turn checks.
+		\end{block}
+		
+		\begin{block}{3. NUTS Kernel}
+			\texttt{NUTS\_one\_step}: Full NUTS transition (Algorithm 3).  
+			Samples momentum, performs slice sampling, builds the tree,  
+			selects candidate state, computes acceptance rate.
+		\end{block}
+		
+	}
+	
+\end{frame}
+
+\begin{frame}{\large{NUTS Architecture Overview — Part II}}
+	
+	{\small
+		
+		\begin{block}{4. Step Size Initialization \& Adaptation}
+			\texttt{FindReasonableEpsilon}: Heuristic search for initial step size.  
+			\texttt{dual\_avg\_init}: Initializes dual-averaging parameters.  
+			\texttt{dual\_avg\_update}: Adapts step size toward target acceptance.
+		\end{block}
+		
+		\begin{block}{5. Warmup Phase}
+			\texttt{NUTS\_warmup}: Runs warmup (Algorithm 6), updating dual averaging  
+			and returning tuned step size \(\epsilon_{\text{final}}\).  
+			\texttt{WarmupConfig}: Stores warmup settings.
+		\end{block}
+		
+		\begin{block}{6. Full Sampler}
+			\texttt{nuts\_sampler}: NUTS without warmup.  
+			\texttt{NUTS\_sampler\_wu}: Full sampler with warmup + sampling phase.
+		\end{block}
+		
+	}
+	
+\end{frame}
+
+
+
+\end{document}
+
+
+
