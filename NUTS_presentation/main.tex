@@ -195,7 +195,7 @@
 				\pause
 				\item The starting position-momentum state $(\theta, r)$ is added to $\mathcal{C}$.
 				\pause
-				\item Each point in $\mathcal{C}$ must satisfy the slice variable condition $exp{\mathcal{L}(\theta)-\frac{1}{2}r\cdot r} \geq u$.
+				\item Each point in $\mathcal{C}$ must satisfy the slice variable condition $exp{(\mathcal{L}(\theta)-\frac{1}{2}r\cdot r)} \geq u$.
 				\pause
 				\item Each point in $\mathcal{C}$ must have the same probability of constructing the trajectory $\mathcal{B}$ and candidate set $\mathcal{C}$.
 			\end{itemize}
@@ -230,7 +230,7 @@
 			\begin{itemize}
 				\item Sample $r \sim \mathcal{N}(0, I)$,
 				\pause	
-				\item $u \sim \mathcal{U}(0, exp{\mathcal{L}(\theta^t)-\frac{1}{2}r\cdot r})$.
+				\item $u \sim \mathcal{U}(0, exp{(\mathcal{L}(\theta^t)-\frac{1}{2}r\cdot r)})$.
 				\pause
 				\item Sample $\mathcal{B}, \mathcal{C} \sim p(\mathcal{B}, \mathcal{C} | \theta^t, r, u, \epsilon)$.
 				\pause
@@ -269,7 +269,7 @@
 			\begin{itemize}
 				\item First a single node for the starting state.
 				\pause
-				\item Each iteration $j$ proceeds in a direction $v_j \sim \mathcal{U}({-1, 1})$ taking $2^j$ Leapfrog steps.
+				\item Each iteration $j$ proceeds in a direction $v_j \sim \mathcal{U}(\{-1, 1\})$ taking $2^j$ Leapfrog steps.
 				\pause
 				\item The iteration stops when the trajectory starts to double back on itself
 				\pause
