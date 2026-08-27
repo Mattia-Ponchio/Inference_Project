@@ -12,6 +12,7 @@
 \usepackage{amssymb}
 \usepackage{listings}
 \usepackage{xcolor}
+\usepackage{subcaption}
 
 \lstset{
 	language=Python,
@@ -468,11 +469,11 @@
 
 \begin{frame}{NUTS implementation}
 
-Inorder to implement the algorithm we need some tools:
+In order to implement the algorithm we need some tools:
 
 \begin{itemize}
 	\item Automatic differentiation 
-	\item Vectorial computation for computations in high diemnsion space
+	\item Vectorial computation for high dimension spaces
 	\item Random number generator 
 	\item Just in time compilation (Not needed but useful...)
 \end{itemize}
@@ -534,7 +535,7 @@ Inorder to implement the algorithm we need some tools:
 
 
 
-\begin{frame}{Recurion Vs Iteration}
+\begin{frame}{Recursion Vs Iteration}
 	
 \begin{columns}
 	% ---------------- LEFT COLUMN ----------------
@@ -603,19 +604,19 @@ def factorial_jax(n: int):
 	{\small
 		
 		\begin{block}{1. Base Components}
-			\texttt{log\_p}: Joint log-density \(L(\theta) - \frac12 r^T r\).  
-			\texttt{stop\_criterion}: Detects U-turns to stop tree expansion.  
+			\texttt{log\_p}: Joint log-density \(L(\theta) - \frac12 r^T r\).  \\
+			\texttt{stop\_criterion}: Detects U-turns to stop tree expansion.  \\
 			\texttt{Leapfrog}: Hamiltonian integrator (reversible, volume-preserving).
 		\end{block}
 		
 		\begin{block}{2. Tree Construction}
-			\texttt{build\_tree\_base}: Depth-0 subtree via one leapfrog step.  
-			\texttt{BuildTree}: Recursive tree expansion using \texttt{lax.fori\_loop};  
+			\texttt{build\_tree\_base}: Depth-0 subtree via one leapfrog step. \\ 
+			\texttt{BuildTree}: Recursive tree expansion using \texttt{lax.fori\_loop};  \\
 			aggregates valid states, acceptance stats, and U-turn checks.
 		\end{block}
 		
 		\begin{block}{3. NUTS Kernel}
-			\texttt{NUTS\_one\_step}: Full NUTS transition (Algorithm 3).  
+			\texttt{NUTS\_one\_step}: Full NUTS transition (Algorithm 3).  \\
 			Samples momentum, performs slice sampling, builds the tree,  
 			selects candidate state, computes acceptance rate.
 		\end{block}
@@ -629,24 +630,494 @@ def factorial_jax(n: int):
 	{\small
 		
 		\begin{block}{4. Step Size Initialization \& Adaptation}
-			\texttt{FindReasonableEpsilon}: Heuristic search for initial step size.  
-			\texttt{dual\_avg\_init}: Initializes dual-averaging parameters.  
+			\texttt{FindReasonableEpsilon}: Heuristic search for initial step size.  \\
+			\texttt{dual\_avg\_init}: Initializes dual-averaging parameters. \\ 
 			\texttt{dual\_avg\_update}: Adapts step size toward target acceptance.
 		\end{block}
 		
 		\begin{block}{5. Warmup Phase}
 			\texttt{NUTS\_warmup}: Runs warmup (Algorithm 6), updating dual averaging  
-			and returning tuned step size \(\epsilon_{\text{final}}\).  
+			and returning tuned step size \(\epsilon_{\text{final}}\). \\ 
 			\texttt{WarmupConfig}: Stores warmup settings.
 		\end{block}
 		
 		\begin{block}{6. Full Sampler}
-			\texttt{nuts\_sampler}: NUTS without warmup.  
+			\texttt{nuts\_sampler}: NUTS without warmup.  \\
 			\texttt{NUTS\_sampler\_wu}: Full sampler with warmup + sampling phase.
 		\end{block}
 		
 	}
 	
+\end{frame}
+
+%results
+\begin{frame}{10-dim Gaussian distribution}
+	\begin{columns}
+		\column{0.5\textwidth}
+		\pause
+		\includegraphics[width=.5\textheight]{images/immagini_tommaso/data_dist.png}
+		\column{0.5\textwidth}
+		\pause
+		\includegraphics[width=.5\textheight]{images/immagini_tommaso/KS_test.png}		
+	\end{columns}
+\end{frame}
+
+
+%Benedetto
+\section{Gauss regression}
+
+% ========================================================
+% SLIDE 1: ESS explanation 1
+% ========================================================
+
+
+\begin{frame}{Effective Sample Size (ESS) (1)}
+	
+	MCMC algorithms generate correlated samples $\theta_1, \theta_2, \dots, \theta_M \sim p(\theta)$. Because these samples are dependent:
+	\[
+	1000 \text{ MCMC samples} \alert{\neq} 1000 \text{ independent samples}
+	\]
+	
+	\vspace{0.5em}
+	
+	\textbf{ESS} estimates how many \alert{independent samples} contain the same information as the $M$ autocorrelated samples:
+	
+	\[
+	\text{ESS} = \frac{M}{1 + 2 \sum_{s=1}^{M-1} \left(1 - \frac{s}{M}\right) \rho_s (f(\theta))}
+	\]
+	
+	\vspace{0.5em}
+	
+	{\small
+		\begin{itemize}
+			\item $M$: total number of generated samples
+			\item $\rho_s$: autocorrelation of the chain at lag $s$
+			\item $\left(1 - \frac{s}{M}\right)$: finite-sample weight factor
+		\end{itemize}
+	}
+	
+\end{frame}
+
+
+% =========================================================
+% SLIDE 2: ESS Depends on the Function f(\theta)
+% =========================================================
+\begin{frame}{Effective Sample Size (ESS) (2)}
+	
+	ESS depends on the specific expectation \alert{$f(\theta)$} being estimated:
+	
+	\vspace{0.3em}
+	
+	To evaluate samplers on high-dimensional targets (e.g., 250D Gaussian), the authors of the NUTS paper compute two separate ESS values for each dimension $j$:
+	
+	\vspace{0.3em}
+	
+	\begin{itemize}
+		\item \textbf{First Moment (Mean):} $f(\theta) = \theta_j \implies \text{ESS}_j^{(\text{mean})}$
+		\begin{itemize}
+			\item Measures efficiency in estimating the central location.
+		\end{itemize}
+		\vspace{0.2em}
+		\item \textbf{Second Central Moment (Variance):} $f(\theta) = (\theta_j - \mu_{\text{true}})^2 \implies \text{ESS}_j^{(\text{variance})}$
+		\begin{itemize}
+			\item Measures efficiency in capturing uncertainty and scale.
+			\item Requires a long baseline run (e.g., 50,000 samples) to obtain $\mu_{\text{true}}$.
+		\end{itemize}
+	\end{itemize}
+	
+\end{frame}
+
+% =========================================================
+% SLIDE 3 ESS
+% =========================================================
+
+
+\begin{frame}{Modern ESS diagnostics}
+	
+	Modern tools (PyMC / ArviZ) default to rank-normalized ESS (Vehtari et al., 2021):
+	\begin{itemize}
+		\item \textbf{Bulk ESS} (\texttt{"bulk"}): Rank-based measure of sampling efficiency in the center.
+		\item \textbf{Tail ESS} (\texttt{"tail"}): Efficiency for extreme quantiles ($5\%$ and $95\%$).
+	\end{itemize}
+	
+	\vspace{0.8em}
+	
+	\alert{Our Methodology:} 
+	Despite modern defaults, in this project we use \textbf{$\text{ESS}^{(\text{mean})}$} and \textbf{$\text{ESS}^{(\text{variance})}$} to remain strictly coherent with the benchmark in the original NUTS paper (Hoffman \& Gelman, 2014).
+	
+\end{frame}
+
+
+
+% =========================================================
+% SLIDE 4 ESS
+% =========================================================
+\begin{frame}{Aggregating ESS}
+	
+	Since ESS is computed per scalar component, we compute a single ESS separately for each dimension. We then aggregate:
+	
+	% \vspace{0.5em}
+	
+	\begin{enumerate}
+		
+		\item \textbf{Joint Multi-Chain Calculation:}
+		All parallel chains (e.g., 4 chains) are fed into the estimator simultaneously to penalize poor mixing, yielding a value of both $\text{ESS}_j^{(\text{mean})}$ and $\text{ESS}_j^{(\text{variance})}$ for each dimension
+		
+		\item \textbf{Conservative Dimension Reduction:}
+		\begin{itemize}
+			\item \textit{Per dim. $j$:} Take the minimum of mean and variance ESS:
+			\[
+			\text{ESS}_j = \min\left(\text{ESS}_j^{(\text{mean})}, \, \text{ESS}_j^{(\text{variance})}\right)
+			\]
+			\item \textit{Across all dimensions:} Take the worst-case dimension:
+			\[
+			\text{ESS}_{\text{final}} = \min_{j \in \{1, \dots, 250\}} \text{ESS}_j
+			\]
+		\end{itemize}
+	\end{enumerate}
+	
+	\alert{Result:} A single, conservative metric reflecting the worst-explored feature of the distribution.
+	
+\end{frame}
+
+
+% ======================================================================
+% GAUSSIAN DATASET
+% ======================================================================
+
+\begin{frame}
+	\begin{center}
+		{\Huge \textbf{250-Dimensional Multivariate Normal}}
+	\end{center}
+\end{frame}
+
+% GAUSSIAN DATASET ============================================================
+\begin{frame}{The Dataset \& Target Distribution}
+	\begin{enumerate}
+		\item This synthetic experiment directly samples from a high-dimensional target distribution $p(\theta)$
+		\item $\theta \in \mathbb{R}^{250}$ is a 250-dimensional parameter vector with a zero-mean multivariate Gaussian target distribution:
+		\[
+		p(\theta) \propto \exp\left( -\frac{1}{2} \theta^T A \theta \right)
+		\]
+	\end{enumerate}
+	
+	\begin{center}
+		\textbf{Our goal:} sample efficiently from this correlated 250D target space.
+	\end{center}
+\end{frame}
+
+
+% precision matrix ============================================================
+\begin{frame}{Precision Matrix}
+	The target precision matrix $A = \Sigma^{-1}$ dictates the geometry of the target space:
+	
+	\begin{itemize}
+		\item $A$ is generated randomly from a \textbf{Wishart distribution} $\mathcal{W}_D(I, \text{df}=250)$ with identity scale matrix $I$ and 250 degrees of freedom.
+		\item \textbf{Role of Wishart:} Guaranteed to yield a symmetric, positive-definite matrix that creates strong correlations and complex, non-isotropic geometry.
+		\item To ensure fair comparison across all runs and samplers, the exact same matrix $A$ is fixed across all experiments.
+	\end{itemize}
+	
+	\vspace{0.5em}
+	
+	\begin{center}
+		\alert{High Correl. + High Dim. = Ideal Benchmark for HMC vs. NUTS}
+	\end{center}
+\end{frame}
+
+% 50k sample run
+\begin{frame}{Baseline Parameter Estimation}
+	To compute $\text{ESS}^{(\text{variance})}$, the true parameter expectation $f(\theta) = (\theta - \mu_{\text{true}})^2$ requires a reference mean $\mu_{\text{true}}$:
+	
+	\begin{itemize}
+		\item We executed an initial baseline run using NUTS for \textbf{50,000 iterations} (with \texttt{target\_accept} $= 0.5$).
+		\item The long run ensures deep exploration and provides a highly precise estimate for $\mu_{\text{true}} \approx E[\theta] \approx \mathbf{0}$.
+	\end{itemize}
+\end{frame}
+
+
+% h-delta plot
+\begin{frame}{Target Acceptance ($\delta$)}
+	\begin{center}
+		\includegraphics[width=1\textwidth]{images/images_benedetto/Combined_Gauss_h-delta.png}
+		
+		\vspace{1em} % Add some space between image and caption
+		
+		\small % Make caption slightly smaller than main text
+		Each gray point is obtained by averaging across all 4 chains. The computation has been repeated 10 times for each value of $\delta$. In red the average across all repetitions.
+	\end{center}
+\end{frame}
+
+% h-delta comparison plots
+\begin{frame}{Target Delta ($\delta$) comparison}
+	\begin{center}
+		\includegraphics[width=0.9\textwidth, height=0.38\textheight, keepaspectratio]{images/images_benedetto/Combined_Gauss_h-delta_b.png}
+		
+		\vspace{0.6em}
+		
+		\includegraphics[width=0.95\textwidth, height=0.38\textheight, keepaspectratio]{images/images_benedetto/paper_target_delta_plot.png}
+		
+		\vspace{-0.3em}
+		{\footnotesize Above: our results for the 250D Gaussian. Below: the original paper results.\ 
+			Each point’s distance from the x-axis shows how effectively the dual averaging algorithm tuned the step size $\epsilon$ for a single experiment.}
+	\end{center}
+\end{frame}
+
+
+
+% ess plot
+\begin{frame}{ESS per gradient}
+	\begin{center}
+		\includegraphics[width=1\textwidth]{images/images_benedetto/Combined_Gauss_Ess-per-grad.png}
+		
+		\vspace{1em} % Add some space between image and caption
+		
+		\small % Make caption slightly smaller than main text
+		Each gray point is obtained by averaging across all 4 chains. The computation has been repeated 10 times for each value of $\delta$. In red the average across all repetitions.
+	\end{center}
+\end{frame}
+
+% ess comparison plots
+\begin{frame}{ESS per gradient comparison}
+	\begin{center}
+		\includegraphics[width=0.9\textwidth, height=0.38\textheight, keepaspectratio]{images/images_benedetto/Combined_Gauss_Ess-per-grad_b.png}
+		
+		\vspace{0.6em}
+		
+		\includegraphics[width=0.98\textwidth, height=0.38\textheight, keepaspectratio]{images/images_benedetto/paper_ess_plot.png}
+		
+		\vspace{-0.3em}
+		{\footnotesize Above: our results for the 250D Gaussian. Below: the original paper results.}
+	\end{center}
+\end{frame}
+
+
+
+
+
+%Mattia
+\section{Credit cards}
+
+%\frame{\titlepage}
+\section{Logistic Regression on German Credit Data}
+\begin{frame}
+	\begin{center}
+		{\Huge \textbf{Logistic Regression on German Credit Data}}
+	\end{center}
+\end{frame}
+
+\begin{frame}{The Dataset}
+	\begin{enumerate}
+		\item Original dataset contains both numerical (e.g. Age, credit amount, ...) and categorical data (e.g. Sex, Civil status, ...) $\rightarrow$ we used the numerical version provided by Strathclyde University.
+		\item 1000 individuals with 24 features and a classifier for "good" (+1) and "bad" (-1) creditors.
+	\end{enumerate}
+	\begin{center}
+		\textbf{Our goal:} sample from the target distribution of the posterior. 
+	\end{center}
+\end{frame}
+
+\begin{frame}{The Model}
+	\begin{center}
+		\textbf{Bayesian Logistic Regression model.}
+	\end{center}
+	
+	The target distribution is $p(\alpha, \beta \mid X, y) \propto p(y|X, \alpha, \beta) \, p(\alpha) \, p(\beta)$
+	\begin{equation*}
+		\propto \exp\left(
+		-\sum_{i}\log\!\left(1+\exp\!\left\{-y_i\left(\alpha + x_i \cdot \beta\right)\right\}\right)
+		-\frac{\alpha^2}{2\sigma^2}
+		-\frac{1}{2\sigma^2}\,\beta \cdot \beta
+		\right)
+	\end{equation*}
+	
+	where:
+	\begin{itemize}
+		\item $x_i$ is a 24-dimensional vector of numerical predictors associated with a customer $i$.
+		\item $y_i$ is $+1$ if the customer should receive credit, $-1$ otherwise.
+		\item $\alpha$ is a scalar intercept term.
+		\item $\beta$ is a vector of 24 regression coefficients.
+		\item All predictors are normalized to have zero mean and unit variance.
+		\item $\alpha$ and each element of $\beta$ are given given weak zero-mean normal priors with a \textbf{fixed} variance $\sigma^2 = 100$.
+		
+	\end{itemize}
+	
+\end{frame}
+
+\begin{frame}{The Model: Likelihood}
+	We assume that the probability of a customer being "good" depends on a linear combination of the features: 
+	\begin{gather*}
+		\eta_i = \alpha + x_i \beta \\
+		p(y_i = 1 \mid x_i, \alpha, \beta) = \sigma(\eta_i)
+	\end{gather*}
+	where $\sigma(\eta_i) = \frac{1}{1 + e^{-\eta_i}}$ is the sigmoid logistic function.
+	
+	Therefore, because $y = \{-1, +1\}$
+	$$
+	\begin{cases}
+		p(y_i = 1 | x_i) = \sigma(\eta_i) \\
+		p(y_i = -1 | x_i) = 1 - \sigma(\eta_i) = \frac{e^{-\eta_i}}{1+e^{-\eta_i}} = \frac{1}{1 + e^{+\eta_i}}\\
+	\end{cases}
+	$$
+	
+	And we obtain the compact form:
+	\begin{equation*}
+		p(y_i | x_i) = \sigma(y_i \eta_i) = \frac{1}{1 + e^{-y_i \eta_i}}
+	\end{equation*}
+\end{frame}
+
+\begin{frame}{Realized average acceptance probability h}
+	\begin{figure}
+		\includegraphics[width=1.0\textwidth]{images/immagini_mattia/Combined_LR_h-delta.png}
+		\caption{Each gray point is obtained by averaging across all 4 chains. The computation has been repeated 10 times for each value of $\delta$. In red the average across all repetitions.}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{Acceptance probability comparison with paper}
+	\begin{figure}[ht]
+		\centering
+		
+		\begin{subfigure}[b]{0.90\textwidth}
+			\includegraphics[width=1\linewidth]{images/immagini_mattia/Combined_LR_h-delta_paper-like.png}
+			\label{fig:Ng1}
+			\caption{\tiny Our results}
+		\end{subfigure}
+		
+		\begin{subfigure}[b]{0.90\textwidth}
+			\includegraphics[width=1\linewidth]{images/immagini_mattia/paper_LR-h-delta.png}
+			\caption{\tiny Paper's results.}
+			\label{fig:Ng2}
+		\end{subfigure}
+		
+	\end{figure}
+\end{frame}
+
+\begin{frame}{ESS efficiency}
+	\begin{figure}
+		\includegraphics[width=1.0\textwidth]{images/immagini_mattia/Combined_LR_ESS-per-grad.png}
+		\caption{Each gray point is obtained by taking the minimum ESS per gradient across all 4 chains for all variables, considering both mean and variance. In red the average across all repetitions.}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{ESS efficiency comparison with paper}
+	\begin{figure}[ht]
+		\centering
+		
+		\begin{subfigure}[b]{0.90\textwidth}
+			\includegraphics[width=1\linewidth]{images/immagini_mattia/Combined_LR_ESS-per-grad_paper-like.png}
+			\label{fig:Ng1}
+			\caption{\tiny Our results}
+		\end{subfigure}
+		
+		\begin{subfigure}[b]{0.90\textwidth}
+			\includegraphics[width=1\linewidth]{images/immagini_mattia/paper_LR-ESS-per-grad.png}
+			\caption{\tiny Paper's results.}
+			\label{fig:Ng2}
+		\end{subfigure}
+		
+	\end{figure}
+\end{frame}
+
+\section{Hierarchical Logistic Regression on German Credit Data}
+\begin{frame}
+	\begin{center}
+		{\Huge \textbf{Hierarchical Logistic Regression on German Credit Data}}
+	\end{center}
+\end{frame}
+\begin{frame}{Changes from previous model}
+	\begin{enumerate}
+		\item We expand the predictor vectors by including two-way interactions ($x_i \cdot x_j$, $i \neq j$), resulting in $\binom{24}{2} = 276 + 24 =$ 300-dimensional vectors of predictors \textbf{x} and a 300-dimensional vector of coefficients \textbf{$\beta$}.
+		\item The variance parameter in
+		the prior on $\alpha$ and $\beta$ is given an exponential prior and estimated as well.
+		\item  We set $\lambda = 0.01$, yielding a weak exponential prior distribution on $\sigma^2$,  whose mean and standard deviation are 100.
+	\end{enumerate}
+	
+	\begin{center}
+		$\Downarrow$
+		
+		These changes make for a more challenging problem: the posterior is in higher dimensions and the variance term $\sigma^2$ interacts strongly with the remaining 301 variables.
+	\end{center}
+\end{frame}
+
+\begin{frame}{The paper's posterior}
+	$p(\alpha, \beta , \sigma^2 \mid X, y) \propto  p(y|X, \alpha, \beta) \, p(\beta| \sigma^2) p(\alpha|\sigma^2) p(\sigma^2) \, \propto
+	$
+	$$
+	\exp\left(
+	-\sum_{i}\log\!\left(1+\exp\!\left\{-y_i x_i \cdot \beta\right\}\right)
+	-\frac{\alpha^2}{2\sigma^2}
+	-\frac{1}{2\sigma^2}\,\beta \cdot \beta - \frac{N}{2}\log{\sigma^2} - \lambda \sigma^2
+	\right)
+	$$
+	where N = 1000 is the number of customers.
+	
+	\begin{center}
+		{\Large \textbf{However...}}
+		
+		\Large
+		that should instead be $\mathbf{\frac{D+1}{2}}$ where D is the dimension of $\beta$ (300).
+		
+	\end{center}
+	
+	\begin{center}
+		(Also the intercept term $\alpha$ is missing in the (log)-likelihood)
+	\end{center}
+\end{frame}
+
+\begin{frame}{Motivation}
+	Now the variance $\sigma^2$ on $\alpha$ and $\beta$ is inferred from data, therefore in the log-posterior for these parameters we get:
+	\begin{align*}
+		\log p(\alpha \mid \sigma^2) &= -\frac{1}{2}\log\left(2\pi\sigma^2\right) - \frac{\alpha^2}{2\sigma^2} \\
+		\log p(\beta \mid \sigma^2) &= -\frac{D}{2}\log\left(2\pi\sigma^2\right) - \frac{\beta^T \beta}{2\sigma^2}
+	\end{align*}
+	
+	So their total contribution to the log-posterior is:
+	\begin{equation*}
+		-\frac{\alpha^2 + \beta^T \cdot \beta}{2\sigma^2} -\frac{D+1}{2}\log(\sigma^2)
+	\end{equation*}
+	
+	Therefore, the log-posterior we sampled from is proportional to:
+	\begin{equation*}
+		-\sum_{i}\log\!\left(1+\exp\!\left\{-y_i\left(\alpha + x_i \cdot \beta\right)\right\}\right)
+		-\frac{\alpha^2}{2\sigma^2}
+		-\frac{\beta^T\beta}{2\sigma^2}\, - \frac{D+1}{2}\log{\sigma^2} - \lambda \sigma^2
+	\end{equation*}
+	
+\end{frame}
+
+\begin{frame}{Realized average acceptance probability h}
+	\begin{figure}
+		\includegraphics[width=1.0\textwidth]{images/immagini_mattia/Combined_HLR_h-delta.png}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{ESS efficiency}
+	\begin{figure}
+		\includegraphics[width=1.0\textwidth]{images/immagini_mattia/Combined_HLR_ESS-per-grad.png}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{ESS efficiency: HMC example}
+	\begin{figure}
+		\includegraphics[width=0.80\textwidth]{images/immagini_mattia/example.png}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{NUTS Tree Depth Histogram}
+	\begin{figure}
+		\centering
+		\begin{subfigure}{.53\textwidth}
+			\centering
+			\includegraphics[width=.6\linewidth]{images/immagini_mattia/LR_NUTS_Counts.png}
+			\caption{Logistic Regression Tree Depths.}
+			\label{fig:sub1}
+		\end{subfigure}%
+		\begin{subfigure}{.53\textwidth}
+			\centering
+			\includegraphics[width=.6\linewidth]{images/immagini_mattia/HLR_NUTS_Counts.png}
+			\caption{Hierarchical LR Tree Depths.}
+			\label{fig:sub2}
+		\end{subfigure}
+		\label{fig:counts}
+	\end{figure}
 \end{frame}
 
 
