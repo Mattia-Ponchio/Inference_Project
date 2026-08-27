@@ -56,7 +56,7 @@
 \begin{frame}{No U-Turn Sampler}
 	\begin{center}
 		 
-		\emph{HMC} is an \emph{MCMC} algorithm that avoids random walk behavior and sensitivity to correlated parameters.\\ %, by taking a series of steps informed by first-order gradient information. \\
+		\emph{HMC} is an \emph{MCMC} algorithm that avoids random walk behaviour and sensitivity to correlated parameters.\\ %, by taking a series of steps informed by first-order gradient information. \\
 		However, it requires the tuning of two user-specified parameters: step size $\epsilon$ and number of steps $L$. \\ 
 		
 		\pause
@@ -85,10 +85,10 @@
 %----------------------------------------------------------------------------------------------------
 
 \begin{frame}{Hamiltonian Monte Carlo}
-	HMC generates proposals with high acceptance probability by suppressing the random walk behavior, but it comes with a price:
+	HMC generates proposals with high acceptance probability by suppressing the random walk behaviour, but it comes with a price:
 	\pause
 	\begin{itemize}
-		\item Comuputing the gradient of the log-posterior at each step. \\
+		\item Computing the gradient of the log-posterior at each step. \\
 		\pause
 		\item Tuning two user-specified parameters: step size $\epsilon$ and number of steps $L$.
 		Tipically, $\epsilon$ can be tuned during warm-up, but $L$ can require costly tuning runs. \\
@@ -107,7 +107,7 @@
 %----------------------------------------------------------------------------------------------------
 
 \begin{frame}{No U-Turn HMC}
-	We want a sampler able to retain the HMC suppression on random walk behavior, but without the need to tune the number of Leap Frog steps $L$. \\
+	We want a sampler able to retain the HMC suppression on random walk behaviour, but without the need to tune the number of Leap Frog steps $L$. \\
 	\pause
 	\begin{itemize}
 		\item Starting from a point in the parameter space $\theta$, the algorithm builds a set of candidate points, doubling the tree size at each iteration. \\
@@ -127,8 +127,8 @@
 \begin{frame}{Probability slicing}
 	\begin{center}
 		 
-		To simplify the derivation and implementation of the algorithm, NUTS uses a slice variable $u$ with conditional distribution $p(u|\theta, r) = \mathcal{U}(u; [0, exp{\mathcal{L}(\theta)-\frac{1}{2}r\cdot r}]) $. \\ 
-		This way $p(\theta, r | u ) = \mathcal{U}(\theta, r; {\theta', r' | exp{\mathcal{L}(\theta)-\frac{1}{2}r\cdot r} \geq u})$. \\
+		To simplify the derivation and implementation of the algorithm, NUTS uses a slice variable $u$ with conditional distribution $p(u|\theta, r) = \mathcal{U}(u; [0, exp{(\mathcal{L}(\theta)-\frac{1}{2}r\cdot r)}]) $. \\ 
+		This way $p(\theta, r | u ) = \mathcal{U}(\theta, r; {\theta', r' | \exp{(\mathcal{L}(\theta)-\frac{1}{2}r\cdot r)} \geq u})$. \\
 		\pause
 		\begin{tikzpicture}
 			\node[opacity=0.75] {
@@ -188,7 +188,7 @@
         \begin{column}{0.53\textwidth}
         \small
 		
-		Given $\mathcal{B}$, set of position-momentum states traced by the leapfrog integrator, we pick deterministicly $\mathcal{C}$, the set of candidate points.
+		Given $\mathcal{B}$, set of position-momentum states traced by the leapfrog integrator, we pick deterministically $\mathcal{C}$, the set of candidate points.
 		\pause
 			\begin{itemize}
 				\item Transitions between states in $\mathcal{C}$ must preserve proability volume and satisfy detailed balance.
@@ -237,7 +237,7 @@
 				\item Sample $\theta^{t+1}, r \sim T(\theta^t, r, \mathcal{C})$, transition kernel.
 			\end{itemize}
 		\pause
-		Where the transition kernel $T(\theta, r, \mathcal{C})$ has leave the distribution over $\mathcal{C}$ invariant, valid because $\epsilon$ is uniform on the elements of $\mathcal{C}$ and $p(\theta, r | u, \mathcal{B}, \mathcal{C}, \epsilon) \propto \mathbb{I}[(\theta, r)\in \mathcal{C}] $.
+		Where the transition kernel $T(\theta, r, \mathcal{C})$ has left the distribution over $\mathcal{C}$ invariant, valid because $\epsilon$ is uniform on the elements of $\mathcal{C}$ and $p(\theta, r | u, \mathcal{B}, \mathcal{C}, \epsilon) \propto \mathbb{I}[(\theta, r)\in \mathcal{C}] $.
 
 		\end{column}
 		
