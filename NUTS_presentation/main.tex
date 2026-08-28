@@ -666,6 +666,20 @@ def factorial_jax(n: int):
 %Benedetto
 \section{Gauss regression}
 
+% ====================
+% SLIDE 0
+% ====================
+\begin{frame}{NUTS vs HMC}
+
+We now proceed to run both NUTS and HMC algorithms using the pyMC library. We do the comparison using both real and synthetic datasets replicating the paper results:
+\begin{itemize}
+    \item Gaussian 250D
+    \item posterior of a Bayesian logistic regression model fit to a German credit data set
+    \item posterior of a Hierarchical Bayesian logistic regression model fit to a German credit data set
+\end{itemize}
+
+\end{frame}
+
 % ========================================================
 % SLIDE 1: ESS explanation 1
 % ========================================================
@@ -964,14 +978,14 @@ def factorial_jax(n: int):
 	\end{equation*}
 \end{frame}
 
-\begin{frame}{Realized average acceptance probability h}
+\begin{frame}{\Large Realized average acceptance probability h}
 	\begin{figure}
 		\includegraphics[width=1.0\textwidth]{images/immagini_mattia/Combined_LR_h-delta.png}
 		\caption{Each gray point is obtained by averaging across all 4 chains. The computation has been repeated 10 times for each value of $\delta$. In red the average across all repetitions.}
 	\end{figure}
 \end{frame}
 
-\begin{frame}{Acceptance probability comparison with paper}
+\begin{frame}{\Large Acceptance probability comparison with paper}
 	\begin{figure}[ht]
 		\centering
 		
@@ -1003,14 +1017,14 @@ def factorial_jax(n: int):
 		
 		\begin{subfigure}[b]{0.90\textwidth}
 			\includegraphics[width=1\linewidth]{images/immagini_mattia/Combined_LR_ESS-per-grad_paper-like.png}
-			\label{fig:Ng1}
+			\label{fig:Ng3}
 			\caption{\tiny Our results}
 		\end{subfigure}
 		
 		\begin{subfigure}[b]{0.90\textwidth}
 			\includegraphics[width=1\linewidth]{images/immagini_mattia/paper_LR-ESS-per-grad.png}
 			\caption{\tiny Paper's results.}
-			\label{fig:Ng2}
+			\label{fig:Ng4}
 		\end{subfigure}
 		
 	\end{figure}
@@ -1083,7 +1097,7 @@ def factorial_jax(n: int):
 	
 \end{frame}
 
-\begin{frame}{Realized average acceptance probability h}
+\begin{frame}{\Large Realized average acceptance probability h}
 	\begin{figure}
 		\includegraphics[width=1.0\textwidth]{images/immagini_mattia/Combined_HLR_h-delta.png}
 	\end{figure}

@@ -2,6 +2,6 @@
 \beamer@sectionintoc {1}{Introduction}{2}{0}{1}
 \beamer@sectionintoc {2}{NUTS algorithm}{14}{0}{2}
 \beamer@sectionintoc {3}{Gauss regression}{71}{0}{3}
-\beamer@sectionintoc {4}{Credit cards}{83}{0}{4}
-\beamer@sectionintoc {5}{Logistic Regression on German Credit Data}{83}{0}{5}
-\beamer@sectionintoc {6}{Hierarchical Logistic Regression on German Credit Data}{91}{0}{6}
+\beamer@sectionintoc {4}{Credit cards}{84}{0}{4}
+\beamer@sectionintoc {5}{Logistic Regression on German Credit Data}{84}{0}{5}
+\beamer@sectionintoc {6}{Hierarchical Logistic Regression on German Credit Data}{92}{0}{6}
